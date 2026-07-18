@@ -4,6 +4,11 @@
 
 # dlake — Commercient Data Lake \ Data Hub CLI
 
+> **A place to aggregate all your company data from multiple systems so that AI
+> agents of any type can see it all — and, if set up, even write data back.
+> Code your own solutions against all your data, safely and securely. Let loose
+> your staff's creativity on your data without risk.**
+
 `dlake` is the official cross-platform command-line client for the
 **Commercient Data Lake \ Data Hub** — in the spirit of the Stripe and HubSpot
 CLIs. It authenticates with a tenant API key, manages profiles, and wraps the
