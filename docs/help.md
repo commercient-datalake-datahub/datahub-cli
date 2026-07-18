@@ -223,10 +223,10 @@ Its 76 setup tools:
 
 **Install** — download the self-contained binary for your platform (no runtime needed) and put it on your `PATH`:
 
-- [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.2.0/win-x64/dlake.exe)
-- [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.2.0/linux-x64/dlake)
-- [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.2.0/osx-arm64/dlake)
-- [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.2.0/SHA256SUMS) · or `npm install -g @commercient/dlake`
+- [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/win-x64/dlake.exe)
+- [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/linux-x64/dlake)
+- [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/osx-arm64/dlake)
+- [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/SHA256SUMS) · or `npm install -g @commercient/dlake`
 
 **Sign in once per tenant** with an API key (generate one under Settings → API Keys), then work:
 
