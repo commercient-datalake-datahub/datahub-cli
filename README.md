@@ -14,14 +14,21 @@ platform's REST and admin surfaces with a scripting-friendly UX.
 
 ## What is Commercient Data Lake \ Data Hub?
 
-A managed, per-tenant data platform on SQL Server that turns your business
-data into an API- and AI-ready lake:
+A managed, per-tenant data platform **built on Microsoft SQL Server** that turns
+your business data into an API- and AI-ready lake. Every tenant gets its own
+managed SQL Server database — schema builder, Data API, events, time travel,
+row-level security, and object-storage attach are all **native Microsoft SQL
+Server** capabilities, not a bolt-on store. (PolyBase external-table attach and
+vector features require SQL Server 2022+ / 2025.)
 
-- **Bring data in** — connectors for HubSpot, Stripe, Salesforce, ServiceTitan,
-  SQL Server, and any ODBC source (via a small on-prem push agent), with
-  incremental sync, change tracking, scheduling, integrity verification, and
-  conflict handling for bi-directional flows. File ingest (CSV / Parquet / XML)
-  creates and evolves tables automatically.
+- **Bring data in** — through **Commercient SYNC**, Commercient Data Lake \ Data
+  Hub can **read and write to and from more than 150 systems** (ERPs, CRMs,
+  e-commerce, and more — see [www.commercient.com](https://www.commercient.com)).
+  Built-in connectors cover HubSpot, Stripe, Salesforce, ServiceTitan, SQL
+  Server, and any ODBC source (via a small on-prem push agent), with incremental
+  sync, change tracking, scheduling, integrity verification, and conflict
+  handling for bi-directional flows. File ingest (CSV / Parquet / XML) creates
+  and evolves tables automatically.
 - **Shape it** — a full schema builder (tables, views, procedures, triggers,
   indexes, functions), a data browser, and a SQL editor with background
   CSV/Parquet exports.
@@ -121,10 +128,15 @@ Every release ships a `SHA256SUMS` file:
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
-## Support
+## Questions & support
 
-Issues and feature requests: open a GitHub issue here, or contact
-support@commercient.com.
+**For any questions, please email [support@commercient.com](mailto:support@commercient.com).**
+That is the fastest way to reach us for help with the CLI, the platform, API
+keys, connectors, or a Commercient SYNC integration. You can also open a GitHub
+issue here for CLI bugs and feature requests.
+
+Learn more about Commercient and the 150+ systems SYNC connects at
+[www.commercient.com](https://www.commercient.com).
 
 ## License
 
