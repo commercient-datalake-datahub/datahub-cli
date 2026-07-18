@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="Commercient Data Lake \ Data Hub" width="360" />
+</p>
+
 # dlake — Commercient Data Lake \ Data Hub CLI
 
 `dlake` is the official cross-platform command-line client for the
@@ -7,6 +11,34 @@ platform's REST and admin surfaces with a scripting-friendly UX.
 
 > **Binary distribution.** This repository publishes the official `dlake`
 > binaries and release notes. The source code is not published here.
+
+## What is Commercient Data Lake \ Data Hub?
+
+A managed, per-tenant data platform on SQL Server that turns your business
+data into an API- and AI-ready lake:
+
+- **Bring data in** — connectors for HubSpot, Stripe, Salesforce, ServiceTitan,
+  SQL Server, and any ODBC source (via a small on-prem push agent), with
+  incremental sync, change tracking, scheduling, integrity verification, and
+  conflict handling for bi-directional flows. File ingest (CSV / Parquet / XML)
+  creates and evolves tables automatically.
+- **Shape it** — a full schema builder (tables, views, procedures, triggers,
+  indexes, functions), a data browser, and a SQL editor with background
+  CSV/Parquet exports.
+- **Serve it** — a per-tenant Data API (REST + GraphQL) over exactly the
+  entities you expose, plus **MCP connectors for AI agents** (a data plane and
+  an admin control plane with 77 tools), natural-language querying, row-change
+  events (SSE / polling / signed webhooks), time travel, and row-level
+  security.
+- **Govern it** — role-based permissions, scoped API keys enforced down to
+  entity and field level *in the database* (fail-closed), audit logs, and data
+  quality rules with alerting.
+- **Extend it to object storage** — link S3 buckets, browse/upload/download,
+  export tables straight to a bucket, and (on SQL Server 2022+) attach parquet
+  and CSV files as queryable external tables with automatic schema discovery.
+
+`dlake` is the terminal/CI way to drive all of it. The full product help lives
+in [docs/help.md](docs/help.md).
 
 - Human-readable tables by default; `--json` everywhere for scripting.
 - Exit codes: **0** ok, **1** error, **2** usage, **3** permission/auth denied.
