@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 60" width="260" height="60">
+  <!-- Commercient "C" mark: open ring + inner accent arc -->
+  <g transform="translate(4 4)">
+    <!-- Outer C: 260° arc, opening on the right -->
+    <path d="M 40 7
+             A 22 22 0 1 0 40 45"
+          fill="none" stroke="#19a5d0" stroke-width="5" stroke-linecap="round"/>
+    <!-- Inner accent arc (short, right side) -->
+    <path d="M 40 18
+             A 8 8 0 0 1 40 34"
+          fill="none" stroke="#19a5d0" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="64" y="32"
+        font-family="'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif"
+        font-weight="400" font-size="26" fill="#19a5d0" letter-spacing="-0.5">Commercient</text>
+  <!-- TM superscript -->
+  <text x="235" y="17"
+        font-family="'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif"
+        font-weight="500" font-size="9" fill="#19a5d0">&#8482;</text>
+
+  <!-- Tagline -->
+  <text x="64" y="50"
+        font-family="'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif"
+        font-weight="400" font-size="12" fill="#6b7280" letter-spacing="0.4">Data Lake \ Data Hub</text>
+</svg>
