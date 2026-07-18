@@ -1,5 +1,15 @@
 # dlake release notes
 
+## 0.2.1 — 2026-07-18
+
+- **Fix: runs on minimal Linux with no ICU.** The self-contained binary now
+  builds with invariant globalization, so it no longer hard-depends on `libicu`
+  — it runs on slim/alpine images and stripped servers where earlier builds
+  aborted at startup with *"Couldn't find a valid ICU package installed"*.
+  (`ca-certificates` is still required for HTTPS on minimal images — install it
+  if `login`/`status` report a TLS error.)
+- No command or flag changes; a drop-in replacement for 0.2.0.
+
 ## 0.2.0 — 2026-07-17
 
 - **Object storage (S3 outlet)**: new `dlake s3` command group — manage bucket
