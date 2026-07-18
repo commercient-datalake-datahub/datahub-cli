@@ -1,0 +1,26 @@
+Commercient dlake CLI — Binary License
+
+Copyright (c) 2026 Commercient, LLC. All rights reserved.
+
+The dlake command-line binaries distributed with this repository and via the
+@commercient/dlake npm package (the "Software") are proprietary software of
+Commercient, LLC.
+
+Permission is granted to download, install, and use the Software solely to
+access and operate Commercient Data Lake \ Data Hub services under a valid
+Commercient subscription or evaluation agreement.
+
+You may NOT, except to the extent permitted by applicable law:
+ 1. reverse engineer, decompile, or disassemble the Software;
+ 2. redistribute, sublicense, rent, or sell the Software or modified copies
+    of it (installing via the official npm package or download mirror is
+    permitted, including inside CI systems and container images);
+ 3. remove or alter proprietary notices in the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+COMMERCIENT, LLC BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
+FROM THE USE OF THE SOFTWARE.
+
+Questions: support@commercient.com
