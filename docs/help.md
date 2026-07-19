@@ -31,7 +31,7 @@ The Tables list shows a **Features** column with chips for what's enabled per ta
 
 ## Views
 
-Standard SQL views over your tables. Views are exposable through the Data API like tables (give a view an "addressable key" in per-entity settings to enable by-key reads/writes). View bodies are validated; refreshing views (sp_refreshview) runs automatically after column-affecting table changes. Creating, altering, or dropping a view does not auto-restart the engine — click **Regenerate / Restart DAB** to expose the change through the Data API.
+Standard SQL views over your tables. Views are exposable through the Data API like tables (give a view an "addressable key" in per-entity settings to enable by-key reads/writes). View bodies are validated; refreshing views (sp_refreshview) runs automatically after column-affecting table changes. Creating, altering, or dropping a view does not auto-restart the engine — click **Regenerate / Restart DAB** to expose the change through the Data API. Views are also manageable from the CLI: `dlake view list|show|create|alter|drop` (see the Command-Line Interface section).
 
 ## Stored Procedures
 
@@ -237,11 +237,14 @@ dlake query "SELECT TOP 10 * FROM DLO.MyTable"    # read-only SQL (RLS-scoped)
 dlake export MyTable --format parquet -o my.parquet
 dlake s3 put sales ./my.parquet exports/       # stream a file to an S3 bucket
 dlake s3 export sales MyTable --format parquet # export a table straight to S3
+dlake s3 attach sales --table Orders --location data/orders.csv  # attach an S3 file as an external table (SQL 2022+)
+dlake s3 discover sales data/orders.csv        # preview the schema attach would discover
+dlake view create MyView --select "SELECT ..." # SQL views in the active schema (list/show/create/alter/drop)
 dlake admin list                                  # every admin-plane tool, driven generically
 dlake admin dab_status
 ```
 
-Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 76 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, and table-to-S3 export).
+Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 76 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, table-to-S3 export, and — on SQL Server 2022+ tenants — `attached`/`attach`/`detach`/`discover` for S3-backed external tables: columns auto-discovered server-side unless `--columns-file` supplies a JSON array of `{"name","type"}`; `attach` needs `data.ingest.manage`). `dlake view …` manages SQL views in the active schema (`list|show|create|alter|drop`; `views` also works): the SELECT you pass — `--select` inline or `--select-file` — is the view **body only** (the server wraps it in `CREATE/ALTER VIEW`), permissions are `views.view/create/edit/delete`, and after create/alter/drop the change reaches the Data API on the next **Regenerate / Restart DAB**.
 
 ## Row-Level Security
 
@@ -341,7 +344,10 @@ so attached tables keep working after a key rotation. On SQL 2017/2019 tenants t
 attach panel is replaced by an inline note —
 *"Attaching S3 files as external tables requires SQL Server 2022 or later."* — because
 the estate is pre-2022; browse/upload/download still work everywhere. Attach was
-**live-verified on the SQL Server 2025 pilot** (see `docs/s3-connector.md`).
+**live-verified on the SQL Server 2025 pilot** (see `docs/s3-connector.md`). The same
+flow is scriptable from the CLI — `dlake s3 attached|attach|detach|discover <connection>`
+— where `discover` previews the server's schema discovery (name/type/nullable plus the
+detected delimiter and warnings) so you can hand-tune a columns file before attaching.
 
 **Bucket locked down by IP?** PolyBase reads S3 **from the SQL Server's public IP**,
 not the Data Lake app's — an `aws:SourceIp`-restricted bucket policy must also allow
