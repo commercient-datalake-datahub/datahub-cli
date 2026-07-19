@@ -39,7 +39,7 @@ vector features require SQL Server 2022+ / 2025.)
   CSV/Parquet exports.
 - **Serve it** — a per-tenant Data API (REST + GraphQL) over exactly the
   entities you expose, plus **MCP connectors for AI agents** (a data plane and
-  an admin control plane with 77 tools), natural-language querying, row-change
+  an admin control plane with 85 tools), natural-language querying, row-change
   events (SSE / polling / signed webhooks), time travel, and row-level
   security.
 - **Govern it** — role-based permissions, scoped API keys enforced down to
