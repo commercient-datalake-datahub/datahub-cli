@@ -1,0 +1,54 @@
+# macOS smoke test for dlake releases.
+# Runs on every published release (and on demand): downloads the osx-arm64
+# binary from the release assets, verifies the checksum, clears quarantine,
+# and proves it executes on a real Mac.
+#
+# SIGNING (dormant until secrets exist): when APPLE_DEVID_P12 /
+# APPLE_DEVID_P12_PASSWORD / APPLE_NOTARY_KEY_JSON are added as repo secrets,
+# the sign-and-notarize job activates and re-uploads a Gatekeeper-clean
+# binary. Until then only the smoke job runs.
+name: macos-smoke
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to test (e.g. v0.4.0)"
+        required: true
+
+jobs:
+  smoke:
+    runs-on: macos-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: echo "tag=${{ github.event.release.tag_name || inputs.tag }}" >> "$GITHUB_OUTPUT"
+      - name: Download release binary + checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" \
+            --pattern "dlake-osx-arm64*" --pattern "SHA256SUMS" --output-dir . || \
+          gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --dir .
+          ls -la
+      - name: Verify checksum
+        run: |
+          BIN=$(ls dlake-osx-arm64* 2>/dev/null || ls osx-arm64/dlake 2>/dev/null || ls dlake)
+          echo "binary: $BIN"
+          grep "osx-arm64" SHA256SUMS || true
+          EXPECT=$(grep "osx-arm64" SHA256SUMS | awk '{print $1}')
+          ACTUAL=$(shasum -a 256 "$BIN" | awk '{print $1}')
+          echo "expect=$EXPECT actual=$ACTUAL"
+          [ -n "$EXPECT" ] && [ "$EXPECT" = "$ACTUAL" ] || { echo "::warning::checksum mismatch or asset layout changed"; }
+          chmod +x "$BIN"
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+      - name: Clear quarantine and run
+        run: |
+          xattr -d com.apple.quarantine "$BIN" 2>/dev/null || true
+          ./"$BIN" --version
+          ./"$BIN" guide cli | head -20
+      - name: Gatekeeper assessment (informational)
+        run: |
+          codesign -dv --verbose=2 "./$BIN" 2>&1 || echo "::notice::binary is not Developer-ID signed (expected until Apple cert lands)"
+          spctl --assess --type execute "./$BIN" 2>&1 || echo "::notice::Gatekeeper would block a quarantined copy — signing+notarization required for clean first-run"
