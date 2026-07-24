@@ -1,5 +1,29 @@
 # dlake release notes
 
+## 0.4.0 — 2026-07-24
+
+- **Full MCP parity.** The CLI is now a complete peer of the MCP connector —
+  every tool callable, every guide readable.
+- **`dlake tool` — generic DATA-plane MCP passthrough** (sibling of `dlake
+  admin`): `tool list`, `tool <tool> --help`, `tool <tool> [--arg value ...]`.
+  Reaches the per-tenant DAB `/mcp` surface through the auth-proxy (JSON-RPC 2.0,
+  JSON **or** SSE), with the same arg-coercion, output and exit-code contract as
+  `admin`. Exposes DAB entity CRUD (`read_records`, `create_record`,
+  `update_record`, `delete_record`, `describe_entities`, `execute_entity`), the
+  analytics tools (`query`, `export_query`, `export_table`, `aggregate`,
+  `get_active_schema`, `ingest_table`), the read-only Time-Travel tools
+  (`query_as_of`, `row_history`, `time_travel_diff`, `temporal_status`), and the
+  document tools.
+- **`dlake guide` — platform docs to stdout**: `guide api` (API Usage Guide) and
+  `guide help [--section <name>]` (Help docs) fetch the server's live copy via
+  the MCP doc tools; `guide cli` prints this CLI reference (bundled at build
+  time).
+- **`login --mcp-url`** overrides the data-plane MCP host per profile (default
+  `https://datalake-ms-dab.commercient.com`); existing profiles pick up the
+  default with no reconfiguration.
+- Docs: `dlake tool`, `dlake guide` and the (previously undocumented) `dlake
+  docs` document-store commands are now in the CLI reference.
+
 ## 0.3.0 — 2026-07-19
 
 - **External tables (PolyBase, SQL Server 2022+ tenants)**: new `dlake s3`
