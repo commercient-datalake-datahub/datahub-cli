@@ -1,5 +1,18 @@
 # dlake release notes
 
+## 0.4.1 — 2026-07-25
+
+- **Fix: `dlake tool` now works.** In 0.4.0 every `dlake tool …` command (`list`,
+  `<tool>`, `<tool> --help`) failed with JSON-RPC `-32000` *"A new session can
+  only be created by an initialize request…"* — the entire data-plane MCP surface
+  was unreachable. The CLI now performs the MCP streamable-HTTP session handshake:
+  it sends an `initialize` request first, captures the `Mcp-Session-Id` response
+  header, and echoes it on every subsequent `tools/list` / `tools/call` in the
+  invocation. `dlake admin` (a separate REST bridge) was never affected.
+- **Cleaner MCP errors.** A JSON-RPC tool error now prints as `MCP error <code>:
+  <message>` instead of a raw envelope, and a dropped/expired session surfaces as
+  *"MCP session handshake failed"* rather than the raw `-32000` text.
+
 ## 0.4.0 — 2026-07-24
 
 - **Full MCP parity.** The CLI is now a complete peer of the MCP connector —
