@@ -192,7 +192,7 @@ A **second, separate MCP connection** for administering a tenant's data lake fro
 
 **Access is strict:** the API key must be **full-scope** *and* belong to an **Admin** user. A per-entity-scoped key, a non-admin full-scope key, and an interactive (non-key) login are all rejected with HTTP 403 + JSON-RPC error `-32001` naming the requirement. Issue a dedicated full-scope key on an admin user for this.
 
-Its 76 setup tools:
+Its 116 setup tools:
 - **Entity exposure / DAB** — `list_exposed_entities`, `set_entity_exposure`, `get_entity_settings`, `set_entity_settings` (per-entity settings incl. column meanings), `restart_dab`, `dab_status`.
 - **NL definitions** — `get_nl_definitions`, `put_nl_definitions`, `export_nl_definitions`, `import_nl_definitions` (export/import round-trips a schema skeleton an external AI can fill).
 - **Import / sync setup** — `list_connections` (secrets never returned), `list_source_entities` (live source re-discovery), `get_entity_sync_config`, `save_entity_sync_config` (validates CT-mode preconditions), `run_entity_sync`, `get_run_history` (runs incl. destination row counts + notes), `verify_entity_integrity` (read-only full-snapshot source-vs-Lake diff for one connector-pull entity — no writes).
@@ -223,10 +223,24 @@ Its 76 setup tools:
 
 **Install** — download the self-contained binary for your platform (no runtime needed) and put it on your `PATH`:
 
-- [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/win-x64/dlake.exe)
-- [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/linux-x64/dlake)
-- [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/osx-arm64/dlake)
-- [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.2.1/SHA256SUMS) · or `npm install -g @commercient/dlake`
+- [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/win-x64/dlake.exe)
+- [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-x64/dlake)
+- [Linux arm64](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-arm64/dlake)
+- [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/osx-arm64/dlake)
+- [macOS Intel (osx-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/osx-x64/dlake)
+- [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/SHA256SUMS) · or `npm install -g @commercient/dlake`
+
+Five platforms are supported — Windows x64, Linux x64, Linux arm64, macOS Apple Silicon, and macOS Intel; the npm wrapper and the CLI's own self-update both resolve the right one automatically.
+
+**Sign up from the terminal** — `dlake register` creates a Commercient Data Lake \ Data Hub account with no existing account, key, or browser session:
+
+```bash
+dlake register start --email you@company.com --company "Acme Inc" --phone +15551234567
+dlake register status --watch          # email verified -> provisioned -> seeded
+dlake register resend                  # re-send the verification email
+```
+
+The password comes from a hidden prompt (or `--password-stdin` for scripts) and is deliberately not accepted as a command-line flag, so it never lands in shell history or the process list. `--instance-type <erp>` is optional and defaults to the Data Lake. You click **one** verification link in the email; everything after that runs by itself — `register status` reports each stage, and a second email carries your Data Lake welcome message with the tenant owner's temporary password. On the first status poll after your lake is seeded the CLI prints a **once-only, 7-day, full owner-admin API key** and saves it into your profile, so the same terminal immediately drives both the data plane (`dlake tool …`) and the control plane (`dlake admin …`, including `create_schema` / `create_table`). Copy that key when it is shown — it is never displayed again. Registration is CLI/REST only by design: there is no MCP equivalent, because an MCP connection is tenant-scoped and needs a key that cannot exist before you register.
 
 **Sign in once per tenant** with an API key (generate one under Settings → API Keys), then work:
 
@@ -244,7 +258,26 @@ dlake admin list                                  # every admin-plane tool, driv
 dlake admin dab_status
 ```
 
-Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 76 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, table-to-S3 export, and — on SQL Server 2022+ tenants — `attached`/`attach`/`detach`/`discover` for S3-backed external tables: columns auto-discovered server-side unless `--columns-file` supplies a JSON array of `{"name","type"}`; `attach` needs `data.ingest.manage`). `dlake view …` manages SQL views in the active schema (`list|show|create|alter|drop`; `views` also works): the SELECT you pass — `--select` inline or `--select-file` — is the view **body only** (the server wraps it in `CREATE/ALTER VIEW`), permissions are `views.view/create/edit/delete`, and after create/alter/drop the change reaches the Data API on the next **Regenerate / Restart DAB**.
+Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 116 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, table-to-S3 export, and — on SQL Server 2022+ tenants — `attached`/`attach`/`detach`/`discover` for S3-backed external tables: columns auto-discovered server-side unless `--columns-file` supplies a JSON array of `{"name","type"}`; `attach` needs `data.ingest.manage`). `dlake view …` manages SQL views in the active schema (`list|show|create|alter|drop`; `views` also works): the SELECT you pass — `--select` inline or `--select-file` — is the view **body only** (the server wraps it in `CREATE/ALTER VIEW`), permissions are `views.view/create/edit/delete`, and after create/alter/drop the change reaches the Data API on the next **Regenerate / Restart DAB**.
+
+**Argument conventions** (`dlake admin <tool>` / `dlake tool <tool>`). Scalars are passed plainly (`--table Invoice`). An argument the tool declares as an **array or object** accepts JSON — any value starting with `[` or `{` is sent through as-is (`--primaryKey '["Id"]'`) — while a plain comma list still works for arrays of scalars (`--primaryKey Id`); malformed JSON is reported as a usage error naming the argument rather than being silently comma-split. Any argument can also read its value from a file with **`@file`** (`--columns @columns.json`; one trailing newline is trimmed, a missing file is a clear usage error naming the argument and path, and `@@` escapes a literal leading `@`). On Windows, `@file` is the recommended form — quoted JSON is mangled by the shell before the CLI sees it. `dlake admin <tool> --help` spells these forms out for every tool that takes an array or object argument.
+
+Worked example — create a table from a columns file:
+
+```json
+[
+  { "name": "Id",         "type": "int",       "identity": true, "nullable": false },
+  { "name": "Number",     "type": "nvarchar",  "size": 50,       "nullable": false, "unique": true },
+  { "name": "Amount",     "type": "decimal",   "precision": 18,  "scale": 2, "nullable": false, "default": "0" },
+  { "name": "CreatedUtc", "type": "datetime2", "nullable": false, "default": "SYSUTCDATETIME()", "isExpression": true }
+]
+```
+
+```bash
+dlake admin create_table --table Invoice --columns @columns.json --primaryKey Id
+```
+
+Column objects take `{ name, type, size?, precision?, scale?, nullable?, default?, isExpression?, identity?, unique?, primaryKey? }`, with the table's key supplied as a top-level `primaryKey` list.
 
 ## Row-Level Security
 
