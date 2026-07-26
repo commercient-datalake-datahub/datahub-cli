@@ -39,7 +39,7 @@ vector features require SQL Server 2022+ / 2025.)
   CSV/Parquet exports.
 - **Serve it** — a per-tenant Data API (REST + GraphQL) over exactly the
   entities you expose, plus **MCP connectors for AI agents** (a data plane and
-  an admin control plane with 85 tools), natural-language querying, row-change
+  an admin control plane with 116 tools), natural-language querying, row-change
   events (SSE / polling / signed webhooks), time travel, and row-level
   security.
 - **Govern it** — role-based permissions, scoped API keys enforced down to
@@ -79,9 +79,24 @@ verify it against `SHA256SUMS`, and put it on your `PATH`.
 |---|---|
 | Windows x64 | `dlake-win-x64.exe` |
 | Linux x64 | `dlake-linux-x64` |
+| Linux arm64 | `dlake-linux-arm64` |
 | macOS Apple Silicon | `dlake-osx-arm64` |
+| macOS Intel | `dlake-osx-x64` |
 
 ## Quickstart
+
+```bash
+# No account yet? Sign up from the terminal — no browser, no key needed.
+dlake register start --email you@company.com --company "Acme Inc" --phone +15551234567
+dlake register status --watch          # email verified -> provisioned -> seeded
+```
+
+Click the single verification link we e-mail you; everything after that is
+automatic. When your lake is seeded, `register status` prints a **once-only,
+7-day owner-admin API key** and saves it into your profile — copy it, it is
+never shown again — and the same terminal can immediately drive both the data
+plane and the control plane. A second e-mail carries your welcome message and
+the tenant owner's temporary password.
 
 ```bash
 # Authenticate once per tenant; profiles switch between tenants.
@@ -109,6 +124,26 @@ dlake admin call list_tables
 ```
 
 Run `dlake --help` or `dlake <command> --help` for the full surface.
+
+## Argument conventions
+
+Tool arguments (`dlake admin <tool>` / `dlake tool <tool>`) accept three forms:
+
+- **Scalars** — `--table Invoice`, `--confirm true`.
+- **Arrays and objects** — a value starting with `[` or `{` is sent as JSON
+  (`--primaryKey '["Id"]'`); a plain comma list still works for arrays of
+  scalars (`--primaryKey Id`). Malformed JSON is reported as a usage error
+  naming the argument.
+- **`@file`** — read the value from a file: `--columns @columns.json`. `@@`
+  escapes a literal leading `@`. This is the reliable form on Windows, where
+  quoted JSON is mangled by the shell before the program sees it.
+
+```bash
+dlake admin create_table --table Invoice --columns @columns.json --primaryKey Id
+```
+
+`dlake admin <tool> --help` documents these forms for every tool that takes an
+array or object argument.
 
 ## Documentation
 
