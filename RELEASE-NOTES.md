@@ -1,5 +1,66 @@
 # dlake release notes
 
+## 0.5.1 — 2026-07-26
+
+- **Self-service sign-up from the terminal** (previously staged as unreleased
+  0.5.0): the new `dlake register` command group creates a Commercient Data Lake
+  \ Data Hub account without an existing account, key, or browser session —
+  `register start --email <you@company.com> --company "<name>" --phone <tel>
+  [--instance-type <erp>]`, `register status [--watch] [--interval <secs>]`, and
+  `register resend`. The password is taken from a hidden prompt or
+  `--password-stdin`; it is deliberately **not** accepted as a flag (shell
+  history / process table). `--instance-type` is optional and defaults to the
+  Data Lake.
+  You click **one** verification link in the e-mail; everything after that is
+  automatic — `register status` reports the progress (email verified →
+  provisioned → Data Lake seeded), and a second e-mail delivers your Data Lake
+  welcome message with the tenant owner's temporary password. On the first
+  status poll after seeding the CLI prints a **once-only, 7-day, full
+  owner-admin API key** and saves it into your profile, so the same terminal
+  immediately drives both the data plane (`dlake tool …`) and the control plane
+  (`dlake admin …`, including `create_schema` / `create_table`). Copy the key
+  when it is shown — it is never displayed again. Registration is CLI/REST only
+  by design; there is no MCP equivalent, because an MCP connection is
+  tenant-scoped and needs a key that cannot exist before you register.
+- **Fix: array and object arguments now work.** Every argument declared as an
+  array used to be comma-split and each fragment coerced as a scalar, so any
+  tool taking an array of **objects** — `create_table --columns`,
+  `create_index`, `set_entity_exposure`, `aggregate --aggregates` — could not be
+  invoked at all: it failed locally before a request was ever sent. An
+  array/object argument whose value starts with `[` or `{` is now parsed as JSON
+  and sent verbatim, and malformed JSON raises a clear usage error naming the
+  argument instead of silently falling back to comma-splitting. The simple comma
+  form (`a,b,c`) still works for arrays of scalars.
+- **New: `@file` for any argument.** Prefix a value with `@` to read it from a
+  file — `--columns @columns.json`. One trailing newline is trimmed, a missing
+  file is a clear usage error naming both the argument and the path, and `@@`
+  escapes a literal leading `@`. This is the recommended form on Windows, where
+  quoted JSON is mangled by the shell before the program ever sees it:
+
+  ```json
+  [
+    { "name": "Id",        "type": "int",      "identity": true,  "nullable": false },
+    { "name": "Number",    "type": "nvarchar", "size": 50,        "nullable": false, "unique": true },
+    { "name": "Amount",    "type": "decimal",  "precision": 18,   "scale": 2, "nullable": false, "default": "0" },
+    { "name": "CreatedUtc","type": "datetime2","nullable": false, "default": "SYSUTCDATETIME()", "isExpression": true }
+  ]
+  ```
+
+  ```bash
+  dlake admin create_table --table Invoice --columns @columns.json --primaryKey Id
+  ```
+
+  Column objects take `{ name, type, size?, precision?, scale?, nullable?,
+  default?, isExpression?, identity?, unique?, primaryKey? }`, with the table's
+  key given as a top-level `primaryKey` list.
+- **Two new platforms — Intel macOS (`osx-x64`) and ARM Linux
+  (`linux-arm64`)**, bringing the supported set to five: Windows x64, Linux x64,
+  Linux arm64, macOS Apple Silicon, macOS Intel. Both `npm install` and
+  self-update resolve them automatically.
+- **`<tool> --help` documents the argument conventions** — whenever a tool takes
+  an array or object argument, its help now spells out the JSON, comma and
+  `@file` forms.
+
 ## 0.4.1 — 2026-07-25
 
 - **Fix: `dlake tool` now works.** In 0.4.0 every `dlake tool …` command (`list`,
