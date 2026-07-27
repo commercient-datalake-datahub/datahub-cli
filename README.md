@@ -119,11 +119,59 @@ dlake s3 get sales reports/q1.csv ./local.csv
 dlake s3 export sales account --format parquet   # server-side table → bucket
 
 # Generic admin control plane (MCP passthrough)
-dlake admin tools                   # list every admin tool your key can use
-dlake admin call list_tables
+dlake admin list                    # list every admin tool your key can use
+dlake admin list_schemas            # call one directly — no `call` sub-verb
+dlake admin create_table --help     # every tool self-documents its arguments
 ```
 
 Run `dlake --help` or `dlake <command> --help` for the full surface.
+
+## Reading related data
+
+The tenant's Data API serves the same entities over **REST** and **GraphQL**, with the same key. For
+anything relational, GraphQL is the one you want — nested reads across declared relationships, filters
+that reach into a related entity, `contains` substring search, and `groupBy` aggregates for counts and
+totals. The REST/OData surface has no `$count` and no `contains()`, so a search box or a pagination
+total on REST alone will send you to raw SQL unnecessarily.
+
+```bash
+# Declare the relationship once (admin), then regenerate the engine for the whole model
+dlake admin set_relationship --parentEntity Customers --childEntity Orders \
+  --parentKeyColumn CustomerId --childFkColumn CustomerId --cardinality many
+dlake admin restart_dab --confirm true
+```
+
+```graphql
+# One request instead of a four-way join
+{ orders(first: 20) {
+    items { OrderNumber Total
+            Customers { FullName City }
+            OrderItems(first: 100) { items { ItemName LineTotal } } }
+    hasNextPage endCursor } }
+
+# A filtered total — the pagination count OData cannot give you
+{ orders(filter: { Customers: { City: { eq: "Atlanta" } } }) {
+    groupBy { aggregations { count(field: OrderId) } } } }
+```
+
+GraphQL's limits, past which the read-only SQL endpoints are the right answer: no `groupBy`/`orderBy`
+on a *related* entity's column, no nested aggregations, and cursor paging only (no offset).
+
+## Atomic multi-row writes
+
+REST and GraphQL writes are **not** transactional, and two GraphQL mutations in one document are not
+atomic either — a multi-step write can partially succeed. When you need all-or-nothing, put the work in
+a stored procedure that wraps `BEGIN TRAN` / `COMMIT` / `ROLLBACK`, expose it, and call it as one
+request:
+
+```bash
+dlake admin create_procedure --name usp_PlaceOrder --body @proc.sql --parameters @params.json
+dlake admin set_entity_exposure --entity usp_PlaceOrder --expose true
+dlake admin restart_dab --confirm true
+```
+
+It either commits everything or leaves the database untouched, and it returns the created rows.
+Procedure entities are exposed on `POST` only — a write should not be reachable by a "safe" method.
 
 ## Argument conventions
 
@@ -158,7 +206,10 @@ array or object argument.
 | Env var | Default | Purpose |
 |---|---|---|
 | `DLAKE_DOWNLOAD_BASE` | `https://downloads.datalake.commercient.com/downloads/dlake` | Binary mirror base (npm installs) |
-| `DLAKE_VERSION` | npm package version | Pin a specific binary version |
+| `DLAKE_VERSION` | npm package version | Pin a specific binary version (same or newer only) |
+| `DLAKE_SHA256` | — | Operator-pinned expected digest (64 hex) for air-gapped installs |
+| `DLAKE_ALLOW_MIRROR_CHECKSUMS` | off | Take `SHA256SUMS` from the mirror too (unsafe) |
+| `DLAKE_ALLOW_DOWNGRADE` | off | Permit an older `DLAKE_VERSION` |
 
 ## Verifying downloads
 
@@ -167,6 +218,15 @@ Every release ships a `SHA256SUMS` file:
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
 ```
+
+The npm `postinstall` verifies automatically, and its integrity chain does not
+follow the mirror: pointing `DLAKE_DOWNLOAD_BASE` at a private mirror moves the
+**binary** only — `SHA256SUMS` is still fetched from
+`downloads.datalake.commercient.com`, so a mirror can only serve bytes the
+publisher already vouched for. Air-gapped installs pin `DLAKE_SHA256=<digest>`
+(recommended) or opt into `DLAKE_ALLOW_MIRROR_CHECKSUMS=1`, which transfers full
+trust to the mirror host and prints a warning. An older `DLAKE_VERSION` than the
+installed package is refused unless `DLAKE_ALLOW_DOWNGRADE=1`.
 
 ## Questions & support
 
