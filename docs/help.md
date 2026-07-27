@@ -9,6 +9,33 @@ Condensed reference for every Help section. Each `##` heading is one section; ca
 
 The Data Lake gives each tenant a managed SQL Server schema (default `DLO`) with a schema builder (tables, views, stored procedures, triggers, indexes, functions), a Data Browser, a SQL editor, and a per-tenant Data API (DAB) with API keys and MCP for AI agents. The sidebar's schema dropdown switches the active schema; the Data Engine badge shows the API container's live status. Most actions are permission-gated per role (Admin / User / ReadOnly).
 
+## Registering a New Data Lake
+
+New here — no tenant, no API key yet? You create your own Data Lake from the command line with **`dlake register`** (self-service onboarding against the standalone Registration API; there is no in-app or MCP surface for it — a remote MCP connection is always tenant-scoped, so it can't exist before you've registered). The flow is three verbs and two emails:
+
+1. **`dlake register start --email <e> --company <name> --phone <tel>`** creates the account and emails you a **verification link**. `--instance-type` is optional — omit it and you get the **Commercient Data Lake** instance by default (machine code `COMMERCIENTDATALAKE`). The portal password comes from a hidden prompt, or piped in with `--password-stdin`; it is never passed as a plain `--password` flag. Start saves a local pending record (userId + a 72h registration token), so the later verbs need no flags.
+2. **Click the verification link** in that first email. Nothing provisions until you do. The link opens a small page **hosted by the Registration API itself** (`…/api/Registration/Verify?uid=…&token=…`) — there is no website to sign into and nothing to copy; clicking it is the whole step, and clicking it twice is harmless. The backend then creates your account and automatically **seeds the Data Lake** (DLO schema, Data Engine, routing).
+3. When seeding finishes you get a **second email** — the **Data Lake welcome email** — carrying your tenant owner's **temporary password** for the web app. Log in and change it. Those two emails are the whole human journey.
+
+**Polling.** `dlake register status` (add `--watch` to loop) reports `emailVerified` → `isProvisioned` → `dataLakeSeeded`. It authenticates with the **registration-scoped bearer** that `start` returned — valid 72 hours and bound to that one `userId`, so it can poll and claim only its own registration. `start` saved it locally, so you never handle it.
+
+**For agents / CI (headless):** `dlake register status --watch` polls until seeding completes and prints a **once-only bootstrap API key** — a **7-day, full owner-admin** key — auto-saved into a `dlake` profile so every other `dlake` command (and MCP, via key exchange) works immediately. It is shown **once**; store it now.
+
+**What the bootstrap key unlocks (do this next).** Because it is an **owner-admin** key, the moment `register status` hands it over the same CLI drives **both planes** with no further login — verified live:
+
+```bash
+dlake tool list                    # data plane: read/write records, query, export, aggregate, time travel
+dlake admin list                   # control plane: DAB config plus the whole DDL surface
+dlake admin create_schema --schemaName sales
+dlake admin create_table --tableName PizzaOrders --columns @columns.json
+```
+
+See **Admin Control Plane** and **Command-Line Interface (dlake)** below for the tool catalogues and the argument conventions. Headless recipe — generate a strong portal password and pipe it in: `openssl rand -base64 18 | dlake register start --email … --company … --phone … --password-stdin`, then `dlake register status --watch`. (The piped password is only the portal password, recoverable later by mail-back; the credentials that matter — the welcome-email temp password and the bootstrap key — never pass through the agent.)
+
+**Lost the verification email?** `dlake register resend` re-sends the same link.
+
+**Hand-off.** Once the bootstrap key is saved (agent) or you've logged in with the welcome-email password (human), you're in the normal login/key world — generate longer-lived keys under **Settings → API Keys**, use `dlake login`, and connect MCP. See **Command-Line Interface (dlake)** below, and the API Usage Guide's Registration section for the REST contract.
+
 ## Dashboard
 
 The landing page — an operational overview of what your data is *doing*, not object counts (those collapse to a single **Schema:** line: tables · views · procedures · triggers · indexes · functions · event triggers, each a link). Each card loads independently and shows a small "Couldn't load…" note on failure rather than blanking the page.
@@ -31,7 +58,7 @@ The Tables list shows a **Features** column with chips for what's enabled per ta
 
 ## Views
 
-Standard SQL views over your tables. Views are exposable through the Data API like tables (give a view an "addressable key" in per-entity settings to enable by-key reads/writes). View bodies are validated; refreshing views (sp_refreshview) runs automatically after column-affecting table changes. Creating, altering, or dropping a view does not auto-restart the engine — click **Regenerate / Restart DAB** to expose the change through the Data API. Views are also manageable from the CLI: `dlake view list|show|create|alter|drop` (see the Command-Line Interface section).
+Standard SQL views over your tables. Views are exposable through the Data API like tables (give a view an "addressable key" in per-entity settings to enable by-key reads/writes). View bodies are validated; refreshing views (sp_refreshview) runs automatically after column-affecting table changes. Creating, altering, or dropping a view does not auto-restart the engine — click **Regenerate / Restart DAB** to expose the change through the Data API.
 
 ## Stored Procedures
 
@@ -44,6 +71,10 @@ User triggers on your tables (AFTER/INSTEAD OF, insert/update/delete). Bodies ar
 ## Indexes
 
 Create/drop nonclustered indexes (optionally unique) on table columns to speed queries. Index names and columns are validated against the catalog.
+
+## Full-Text Search
+
+The **Full-Text Search** page (next to Indexes) manages SQL Server full-text indexes for word/phrase search over character and XML columns. First create the tenant's catalog (one click), then pick a table — it needs a single-column unique key (a normal single-column primary key works) — choose the text columns to index, and create. A new index populates in the background; the page shows a live status chip (populating → idle) and lets you drop indexes with confirmation. If the database engine doesn't have the Full-Text component installed, the page says so instead of offering setup. Full-text indexes also upgrade Documents search from pattern matching to word-aware ranking where available.
 
 ## Functions
 
@@ -62,6 +93,8 @@ Creating or dropping a schema requires **both**: (1) the app permission `schemas
 ## Security & Access Control
 
 Role-based permissions per tenant: **Admin** (everything), **User** (data read/write + view schema objects), **ReadOnly** (view + data read). The catalog is **56 granular permission keys** (e.g. `tables.create`, `data.read`, `sql.execute`, `audit.view`, `events.read`, `api-keys.manage`), each shown in Access Management with a **label and a description** of what it unlocks; keys are granted to roles, the UI hides what you can't do, and the API enforces the same keys server-side. Two gates worth calling out: the **table list and detail** require **`tables.view`**, and reading a table's **metadata** (columns/features) requires **`metadata.read`** — a permission added in this release and **backfilled to every role that already holds `data.read`**, so existing users keep their access. Sensitive operations (raw SQL, exports from the console) additionally require TOTP two-factor step-up. The tenant owner bypasses permission checks.
+
+**Recent security hardening** (visible if you hit it): **step-up (2FA) tokens are tenant-bound** — a step-up minted for one tenant won't authorize actions in another; **replacing your TOTP authenticator requires entering a current code** (the new secret stays *pending* until you confirm it, so a half-finished swap can't lock you out); **Google sign-in is off unless your operator enables it**; and **malformed or tampered tokens are rejected with a clean 401** rather than a vague error.
 
 ## Data Browser
 
@@ -108,6 +141,26 @@ Everything runs in the **active schema** in one transaction with RLS enforced; i
 
 Ingest enforces **size caps** — on row count, column count, header length, individual cell size, and (for XML/Parquet) raw byte size — so a malformed or runaway file **fails fast with a clear message** naming the limit it hit instead of stalling the load. When a file introduces new columns, the **schema evolution is transactional**: the table's shape and the data land together, or neither does.
 
+## Documents (upload, search, retrieval)
+
+A per-tenant **document store** for PDFs, images, and text — upload once, then search and retrieve from the API, MCP, and CLI. Each upload is **SHA-256 deduped** (an identical file is returned, not re-stored), **converted to a markdown rendition** (PDF text via PdfPig; text/HTML converted; **images are not OCR'd in v1** — they get a metadata stub but are still cataloged and searchable by metadata), **chunked**, and — when an embedding provider is configured — **embedded** for semantic search. Embedding is best-effort and never fails the upload; the catalog row shows `embedStatus` (`pending`/`done`/`failed`/`skipped`).
+
+Set **standard CMS metadata** at upload (title, description, author, subject, keywords, language, category, version, source system) and edit it later. Optionally link a document to a data-lake entity row (schema/table/row id).
+
+**Caller-supplied markdown.** Any upload can include its own `markdown` rendition — it is stored verbatim and server conversion is skipped. This is how you make an **image** searchable without OCR: describe it in markdown (an AI assistant can do this by looking at the image) and that description is what search matches. Re-uploading the same file later *with* markdown **upgrades** an earlier stub in place; caller markdown is never silently overwritten. Provenance is tracked as `markdownSource` (`caller`/`converted`/`stub`).
+
+**Search** is hybrid: metadata + extracted-text matching, plus (on SQL 2025+ tenants with an embedding provider set) a semantic vector search over the embedded chunks — merged and scored, with the best snippet and which method matched.
+
+**Configure embeddings (Settings → Embeddings).** The **Settings → Embeddings (semantic search)** card (owner-or-admin) is where you set the provider that powers semantic search — no raw SQL needed. Paste your **OpenAI** API key (or point the **Endpoint** at a local **Ollama**, which needs no key), optionally override the **Model** and **Dimensions** (256–4096), and **Save**; the key is stored encrypted and never shown again (the card shows only a masked `…abcd` hint, and leaving the key field blank on a later edit keeps the stored one). Hit **Test** to prove connectivity and see the returned dimensions and latency inline. **Changing the model or dimensions invalidates every existing document embedding** (stored vectors must all share one dimensionality) — the Test button warns on a mismatch, and you should then click **Embed pending chunks**, which re-embeds documents left un-embedded (uploaded before a provider was set, or after a model/dimensions change) in batches, looping until none remain.
+
+Reads are gated by **`data.read`**; uploads, metadata edits, and deletes by **`data.ingest`**; upload/delete/metadata-edit are audited. Over MCP: `upload_document`, `search_documents`, `get_document`, `list_documents`. Over the CLI: `dlake docs upload|list|search|get|rm` (`--markdown <file>` supplies a rendition). Upload cap is `Documents:MaxSizeMb` (default 50 MB); the MCP `upload_document` tool caps tighter at 10 MB.
+
+## KB Semantic Search (AI corpus)
+
+Separate from the document store, this searches a tenant's **synced AI corpus** (the `odbc_AI_ContentHub` documents and `odbc_AI_VectorInfo` embedding chunks that a Commercient AI knowledge base syncs into the lake). Requires SQL Server 2025+ and a configured embeddings provider (same **Settings → Embeddings** card as Documents). A document belongs to a knowledge base by its **`KnowledgeBaseType`** matching a KB **`Code`** — the only membership signal in the synced tables (bulk-crawled content with a blank `KnowledgeBaseType` isn't attributable to a KB and won't appear).
+
+An operator **syncs per-KB search views** (`POST /api/ddl/search/kb-views/sync`, permission `views.create`): one `vw_search_contenthub_<Code>` per active KB, carrying the chunk text and a `VECTOR(1536)` embedding column. Views are never dropped automatically — obsolete ones are reported for a manual drop. To let an **API key** search a KB, an admin **grants** it (`POST /api/ddl/search/kb-views/grant` with `{code, apiKeyId}`, permission `views.edit`), which grants that key's database principal `SELECT` on the view. **Semantic search** (`POST /api/ddl/search/semantic` with `{view, query, top}`, permission `data.read`, top max 50) embeds the query and ranks chunks by cosine distance — running **under the caller's key principal**, so a key only sees KBs it was granted (others get a clean permission error). ⚠️ The query embedding **model must match** the model that produced the corpus (mismatched models give meaningless results). Over MCP: the `semantic_search` tool; over the CLI: `dlake tool semantic_search --view <v> --query "…"`.
+
 ## Import (Connectors)
 
 Pull data from an external source into your tables. Seven connectors ship today — **HubSpot**, **Stripe**, **Salesforce**, **ServiceTitan**, **Commercient**, **SQL Server**, and the **ODBC Agent** — behind a common seam (more plug in over time); each imports **every object the key can read** (discovered from the account, not a fixed list): HubSpot CRM objects (contacts, companies, deals, tickets, products, quotes, engagements, custom objects), Stripe resources (customers, charges, payment_intents, invoices, subscriptions, products, prices, balance_transactions), Salesforce SObjects (Account, Contact, Lead, Opportunity, Case, ... plus custom `__c` objects, with incremental via LastModifiedDate), ServiceTitan resources (customers, locations, contacts, jobs, projects, appointments, job types, invoices, payments, estimates, technicians, business units, employees, memberships — incremental via `modifiedOnOrAfter`), — for **Commercient** — the tenant's **own `dbo.SF_*` tables** synced locally over T-SQL (no external API; incremental via each table's `rowversion`/`TimeStamp`, server-side `MERGE` with no rows round-tripping through the app), — for **SQL Server** — **any SQL Server database this platform can reach on the network** (paste a connection string, stored encrypted; tables/views discovered from the catalog with **exact column types**; needs a single-column PK or an `id` column; a `rowversion` column enables cheap incremental), or — for the **ODBC Agent** — a **push source**: a small portable agent you install NEXT TO any ODBC-reachable database (Oracle, MySQL, Access, old ERPs) that pushes data **outbound over HTTPS**, so **no inbound access to the source network is needed** (see Agent setup below). It's the **Import** page under Schema Builder (`/import`) — distinct from **Import Data** (file upload).
@@ -122,7 +175,7 @@ Once an agent has checked in, the panel also shows its **telemetry** — install
 
 **Key requirement**: the agent's API key must carry the dedicated **DataLake Agent** permission (`agent.sync`, Access Management — off by default) or be an owner key — fetching the server-stored source connection string requires it, and since the string lives only server-side, a plain admin (`data.ingest`) key is **not** enough to run the agent.
 
-Best practice: a dedicated agent user granted only `agent.sync` — its key runs the whole push flow and nothing else. Easiest install path: **Create setup link**, open it in a browser **on the source server**, save and unzip the bundle, then **double-click `DataLakeAgent.exe`** (or `DataLakeAgent-x86.exe` on a 32-bit server) and approve the Windows elevation (UAC) prompt — the bundle's `appsettings.json` is already configured, so there's nothing to edit, and double-clicking offers to install the scheduled task for you. That task is a Windows Scheduled Task named **`Commercient Data Lake \ Data Hub <slug> <ptid>`** firing every 5 minutes (one tick: check for a pushed update → report catalog → claim due work → push → exit; below-normal priority, ~half a core only while actively pushing, zero footprint between firings; `uninstall-task` + delete the folder removes everything). For a headless/scripted install, run `DataLakeAgent.exe install-task 5` from an elevated prompt instead. **Multiple agents share one server** — one folder per connection, each with its own config, task name, and single-instance guard, so agents for different connections run in parallel.
+Best practice: a dedicated agent user granted only `agent.sync` — its key runs the whole push flow and nothing else. Easiest install path: **Create setup link**, open it in a browser **on the source server**, save and unzip the bundle, then **double-click `DataLakeAgent.exe`** (or `DataLakeAgent-x86.exe` on a 32-bit server) and approve the Windows elevation (UAC) prompt — the bundle's `appsettings.json` is already configured, so there's nothing to edit, and double-clicking offers to install the scheduled task for you. That task is a Windows Scheduled Task named **`Commercient Data Lake \ Data Hub <slug> <ptid>`** firing about once a minute (one tick: check for a pushed update → claim due work → push → exit; below-normal priority, ~half a core only while actively pushing, zero footprint between firings; `uninstall-task` + delete the folder removes everything). The agent reports its **catalog** (the discovered entity list) once when it starts and again only when someone presses **Re-discover** — there is no longer an hourly catalog report. When any entity is set to **Change tracking** streaming, the agent promotes itself to a **resident** process that streams changes continuously (roughly every couple of seconds) instead of exiting between firings. For a headless/scripted install, run `DataLakeAgent.exe install-task 5` from an elevated prompt instead. **Multiple agents share one server** — one folder per connection, each with its own config, task name, and single-instance guard, so agents for different connections run in parallel.
 
 Within a minute of the first run the agent's tables appear in the entity list (system/catalog schemas — `sys`, `INFORMATION_SCHEMA` and friends — are never offered). Entities sync on the **key the driver reports** — single or composite — and the key columns **keep their real names**: the target gets the same primary key as the source. When none of the synced columns is named `id`, the target also gets a **computed, uniquely-indexed `id` column** holding the row's URL-ready API extension (`KeyName/value` — or `K1/v1/K2/v2` for composite keys), the same convention CRM Pro tables use, so every row stays addressable by a single id. Keyless views need a column named `id`.
 
@@ -131,6 +184,17 @@ Each agent entity carries a **Limits &amp; watermark** link under its target tab
 **Moving or restoring databases.** The per-table sync cursor (change-tracking version or incremental watermark) lives **in the Data Lake tenant database** alongside the data it tracks, so it travels with a move/detach and a backup/restore: restore a 2-day-old Data Lake backup and each table's cursor rolls back 2 days too, and the agent automatically **re-pulls that window** on its next run (re-ingesting is idempotent, so nothing is duplicated). This is authoritative — the agent follows the Data Lake's cursor even when it moves **backward**, so a restore can never leave a table silently short. Two safety cases fall back to a **full re-baseline** (a one-off complete re-pull) instead of resuming: the restore reached further back than the **source's** change-tracking retention window, or the **source** database itself was restored to an older point than the cursor. Change-tracking sources with **column tracking** enabled also skip re-pulling rows that changed only on columns this entity doesn't sync (a note records when this suppression is active); the cursor still advances, and a later change to a synced column pulls the row normally.
 
 For agent connections, **Run/Resync queue the request** and the entity shows a live **"sent to agent — waiting for its next poll…"** status until the agent claims it (typically within its poll interval), then the normal phase/row-count progress takes over — the panel refreshes itself, including for scheduled and agent-initiated runs; Test shows when the agent last checked in.
+
+**Streaming catch-up chips (Change-tracking entities).** When an agent entity streams changes, its row shows a small **status chip** reflecting how far behind the live source it is (the agent pushes this backlog to the server on every ~2-second tick, so it's near-real-time):
+
+- **`current`** (green) — streaming is at the source's current change-tracking version; nothing pending.
+- **`catching up — N rows behind`** (amber) — streaming is working through a backlog of *N* change rows; it will converge on its own.
+- **`drain retrying`** (amber) — the agent hit a *transient* error and is retrying by itself; the entity is still syncing and **no action is needed** (this is self-healing, not a failure).
+- **`parked — full sync needed`** (amber, terminal) — streaming has **stopped** for this entity and won't catch up until you press **Resync**, usually because the source's change-tracking history expired while the agent was offline longer than the retention window. This is the one chip that needs you to act.
+
+**Re-discover pending badge.** On an agent connection, pressing **Re-discover** shows a **`re-discovery pending — requested <time ago>`** badge next to the button until the agent re-reports its catalog on its next poll (usually within a minute), when the badge clears itself. (The agent reports its catalog at startup and on Re-discover only — there's no periodic re-report — so this badge is how you know the request is in flight.)
+
+**Streaming health.** For a streaming connection a status line shows the agent's live streaming state: **live** (with the time of the last drain), **starting…**, **refused** (with the reason), or **faulted — retrying in Ns**. If the agent predates streaming support it reads "no status reported yet".
 
 Secrets are **encrypted at rest** in the tenant DB, never returned, with a **Test** that confirms it authenticates (or, for Commercient, that the local DB is reachable) and counts readable objects. Two optional free-text fields: a **table-name middle term** namespaces this connection's tables (blank → a provider's connections share tables `<prefix>_<entity>`, e.g. `stripe_customers`; set → separate `<prefix>_<middle>_<entity>`, e.g. `hs_148779116_contacts`) and is **fixed at creation** (changing it would orphan the tables already created); and a **Provider Tenant ID (PTID)** is just an editable label for the source account (metadata, does not affect table names).
 
@@ -154,9 +218,13 @@ Column types are **schema-driven** where the provider declares them (HubSpot/Sal
 
 A live **Run history** shows the **hub**, rows pulled, insert/update/delete counts, and the full error on a failure.
 
+**Traffic graph.** Each connection card also shows a **Rows synced per day** chart (last 30 days, UTC) built from a durable daily rollup, so it survives run-history trimming. Bars show rows synced (with insert/update/delete split and run counts in the hover tooltip) and mark days that had **failures/errors** (red) or **warnings** (amber); an empty range reads "No connector activity in the last 30 days."
+
 While a run is in flight the per-entity status shows live **progress** — the current phase (queued -> starting -> reading -> staging -> merging; **queued** means it's waiting for a run slot, not stuck), records retrieved so far, and elapsed seconds (no percentage: streaming pulls and Stripe's APIs expose no upstream total, so records-retrieved is the honest signal). The first incremental run is a full pull; later runs fetch only the delta. An entity with **no records** in the source completes as a clean no-op (0 rows; the table isn't created until there's data) — not a failure, so empty/scheduled objects don't pile up errors.
 
 Concurrent runs are **bounded two ways** — platform-wide (default 4) and **per connection** (default 3), so one connection's big resync queues on itself and can't starve other connections' syncs; over a cap, runs show **queued** and start as slots free. Long pulls hold **no database locks** (only the final brief merge is transactional), so a slow sync never blocks reads of the target table. Run history is **kept bounded automatically** (newest ~500 runs per connection, configurable) and a **Clear history** action purges it on demand (an in-progress run is preserved).
+
+**Sync worker slots.** At the top of the Import page a small **slots strip** shows where this tenant's connector pulls run: an **API (this node)** row is always present, and — if the tenant has a **dedicated sync worker** provisioned — a **Worker `<machine>`** row (with its version and last heartbeat). Each row shows three pools — **sync**, **verify**, and **resync** — as `used/cap`, and appends `(+N queued)` in amber when work is waiting on a pool (sustained queueing is the signal to raise worker threads). A dedicated worker offloads heavy syncs from the API request threads; tenants served centrally show just the API-node row.
 
 (4) **Schedule** — each entity has a Schedule dropdown (Manual only / every 15 min / hourly / every 6 hours / daily); pick an interval and Save, and a background runner syncs it automatically on that cadence (first scheduled run starts within a couple of minutes), using the same mode/table and appearing in Run history alongside manual runs. Gated by **`data.ingest`** (Admin role). Deleting a connection removes its selections + run history but keeps the imported tables. Managed via REST under `/api/ddl/import/*`; **not exposed as an MCP tool**.
 
@@ -185,9 +253,9 @@ The Data Engine (DAB) is a per-tenant container serving REST + GraphQL over the 
 - **MCP sessions** (admin): every OAuth-connected agent session is listed and can be terminated.
 - **Config history**: every engine config version is recorded (who/when/what); any version can be viewed, diffed, and reverted to.
 - **Engine management**: Restart DAB rebuilds the config and redeploys the container; the Resources tab shows live container CPU/memory/network stats. Schema DDL (creating/altering/dropping tables, views, procedures) never auto-restarts the engine — batch your changes and click **Restart DAB** when ready.
-- **Host mode (seeing the real error)**: the data plane deliberately returns a generic *"While processing your request the database ran into an error"* for SQL failures. Switching **host mode** to `development` makes the engine return the underlying SQL error instead — the fastest way to diagnose a failing entity, a constraint violation, or a bad stored procedure. It applies on the **next Restart DAB**. **Switch it back to `production` when you're done**: it is tenant-wide and the detail is not meant for end users.
+- **Host mode (seeing the real error)**: the data plane deliberately returns a generic *"While processing your request the database ran into an error"* for SQL failures. Switching **host mode** to `development` makes the engine return the underlying SQL error instead — the fastest way to diagnose a failing entity, a constraint violation, or a bad stored procedure. It applies on the **next Restart DAB** (the page flags the pending restart). **Switch it back to `production` when you're done**: it is tenant-wide and the detail is not meant for end users.
 - **Relationships (for the GraphQL surface)**: declaring a relationship is what lets an *application developer* read a parent and its children in one nested GraphQL request, and filter by a related entity's column. It is a Data-API concern only — it creates no database foreign key and changes nothing for the SQL editor, the Data Browser, MCP or the CLI. See the API Usage Guide for the developer-facing detail.
-- **Atomic multi-row writes**: Data API writes are **not** transactional — a multi-step write (a header, its line items, a status row) can partially succeed and leave orphans. For all-or-nothing, wrap the work in a **stored procedure** (`BEGIN TRAN` / `COMMIT` / `ROLLBACK`), expose it as an entity, and call it as a single `POST`. Procedure entities are POST-only by design, since a write should not be reachable by a "safe" method.
+- **Atomic multi-row writes**: Data-API writes are **not** transactional — a multi-step write (header + lines + a status row) can half-succeed and leave orphans. When you need all-or-nothing, wrap the work in a **stored procedure** (`BEGIN TRAN` / `COMMIT` / `ROLLBACK`) and expose it as an entity; one call then either commits everything or leaves the database untouched. Procedure entities are exposed on `POST` only, since a write must not be reachable by a "safe" method.
 
 ## Admin Control Plane (MCP)
 
@@ -195,67 +263,39 @@ A **second, separate MCP connection** for administering a tenant's data lake fro
 
 **Access is strict:** the API key must be **full-scope** *and* belong to an **Admin** user. A per-entity-scoped key, a non-admin full-scope key, and an interactive (non-key) login are all rejected with HTTP 403 + JSON-RPC error `-32001` naming the requirement. Issue a dedicated full-scope key on an admin user for this.
 
-Its **116** setup tools, by area (the counts below add up to 116):
+**Manage your schema end-to-end from Claude (or the CLI).** The control plane now covers the full schema lifecycle — creating and dropping **tables**, adding/altering/dropping **columns**, **indexes**, **full-text** catalogs and indexes, **functions**, **stored procedures**, **triggers**, and **schemas** — the same operations the Schema Builder UI offers, enforced with the **same permissions and audit trail** (every write is logged as `mcp-admin:<tool>`, and destructive tools refuse without `confirm:true`). So you can ask Claude to design a table, add a column, or build an index and it happens against your lake exactly as if you'd done it in the UI; the change reaches the live Data API on the next **Restart DAB**.
 
-**Building the schema — 30 tools.** Everything the Schema Builder does in the UI, scriptable from an agent or the CLI. Each *drop* is destructive and needs `confirm: true`; platform-owned system objects are refused; and nothing new reaches the live Data API until you call `restart_dab`.
+Its 116 setup tools:
+- **Entity exposure / DAB** — `list_exposed_entities`, `set_entity_exposure`, `get_entity_settings`, `set_entity_settings` (per-entity settings incl. column meanings), `restart_dab`, `dab_status`.
+- **NL definitions** — `get_nl_definitions`, `put_nl_definitions`, `export_nl_definitions`, `import_nl_definitions` (export/import round-trips a schema skeleton an external AI can fill).
+- **Import / sync setup** — `list_connections` (secrets never returned), `list_source_entities` (live source re-discovery), `get_entity_sync_config`, `save_entity_sync_config` (validates CT-mode preconditions), `run_entity_sync`, `get_run_history` (runs incl. destination row counts + notes), `verify_entity_integrity` (read-only full-snapshot source-vs-Lake diff for one connector-pull entity — no writes).
+- **Status** — `get_schema_status` (this tenant), `get_data_quality_summary`.
+- **Data-quality rules** — `list_dq_rules`, `set_dq_rule` (upsert), `delete_dq_rule`. Rule types: `min_row_count` (`{"minRows":N}`), `not_null` (`{"columns":["a","b"]}`), `freshness_max_age_hours` (`{"timestampColumn":"ModifiedUtc","maxAgeHours":24}`), `null_rate` (`{"column":"email","thresholdPct":5}`), `row_count_drift` (`{"thresholdPct":20}`), and `row_count_parity` (`{"tolerancePct":1}` and/or `{"toleranceRows":10}`). `row_count_parity` tunes the full-mirror source-vs-destination check that runs *during* a sync: set `enabled:false` to silence its warning for the entity, or a tolerance to allow small drift; with no rule row present, parity behaves exactly as before. All other types are also evaluated on the platform's data-quality schedule.
+- **GraphQL relationships** — `list_relationships`, `set_relationship` (upsert; **validates both entities and both columns exist** in the tenant schema — a bad name is rejected so it can't crash-loop DAB), `delete_relationship`. A declared parent/child link nests the child under the parent (cardinality `many` by default) and the parent under the child (`one`) in the Data API's GraphQL. Changes are **not** auto-applied — they take effect on the next Regenerate / Restart DAB.
+- **Events (row-change capture)** — `list_event_captures`, `enable_event_capture` (installs the capture trigger + column map; idempotent), `disable_event_capture`, `refresh_event_capture` (rebuild the column map/trigger after raw-SQL column changes).
+- **Webhooks** — `list_webhook_subscriptions` (tenant-wide; secrets never returned), `create_webhook_subscription` (URL is SSRF-checked before storage; **returns the signing secret exactly once — store it, it can never be retrieved again**), `update_webhook_subscription` (URL re-checked; `enabled:false` pauses delivery), `delete_webhook_subscription`, `get_webhook_delivery_status` (cursor, failure streak, dead-letters).
+- **Time Travel / change tracking / change logging** — `get_table_history_status` (one-call posture for all three), `enable_time_travel` (needs a PK; mutually exclusive with Concurrency Protection), `disable_time_travel` (`dropHistory:true` also drops the history table), `query_row_history` (one row's full version timeline by PK, RLS-scoped, **capped at 200 versions**, default 50), `enable_change_tracking` / `disable_change_tracking` (omit `table` for the database level), `enable_change_logging` / `disable_change_logging` (shadow table + trigger; `dropShadow:true` also drops the shadow data).
+- **RLS / permissions / roles** — `list_rls_policies` (read-only — creating/dropping policies stays in UI/REST), `get_permission_matrix`, `grant_permission` / `revoke_permission` (target a role *or* one user as an override), `list_roles`.
+- **Docs** — `get_help_docs` (optional `section`), `get_api_guide` — return this Help / the API guide as markdown (mirror of the data plane's `getHelpDocs`/`getAPIGuide`).
+- **API keys** — `list_api_keys` (metadata only, no hashes; each row includes its **project**, and an optional `project` arg filters to one project), `revoke_api_key`, `create_api_key` (mints for the calling admin by default, or pass `targetUserId` to own it by another user — admin-only, same escalation guard as the UI; pass `project` to file the key under a project — get-or-create by name, case-insensitive, grouping only; `expirationDays` must be 7/30/90/180; **returns the raw key exactly once — only its hash is stored**), `extend_api_key` (push a key's expiry out by 7/30/90/180 days — `max(now, current) + days`; refuses a revoked key), `unrevoke_api_key` (restore a revoked key; leaves the expiry untouched, so a still-expired key must then be extended), `get_key_rights`, `set_key_rights` (denylist model — removals only, applied at each exchange/refresh), `set_key_entity_scopes` (empty scope = full access; a non-empty scope also locks the key out of this admin plane).
+- **Users** — `list_users` (read-only, no hashes), `activate_user`, `deactivate_user` (the tenant owner and your own account are refused).
+- **On-prem agent** — `get_agent_status` (last seen, version, streaming diagnostics), `trigger_agent_update` (`cancel:true` withdraws a pending push).
+- **Export jobs** — `list_export_jobs`, `cancel_export_job` (this tenant's running jobs only).
+- **Audit** — `query_audit_log` (every DDL/admin op incl. `mcp-admin:*`; filter by operation/target/user; **capped at 200 rows**, default 50).
+- **Notifications** — `list_notifications` (the calling user's in-app notifications + unread count).
+- **Schema sweep** — `run_schema_sweep` (runs the internal schema-migration self-heal against **this tenant's own database only**; `includeManual:true` also applies operator-gated migrations).
+- **Object storage (S3 outlet)** — `list_s3_connections`, `create_s3_connection` (secret write-only, redacted in the result), `test_s3_connection`, `delete_s3_connection`; `s3_list_objects` (continuation-token paging), `s3_upload` / `s3_download` (base64, **hard 8 MB cap** via `S3:McpUploadMaxBytes` — larger files go through `dlake s3 put`/`get` or the UI), `s3_discover_schema` (read a parquet footer / CSV head and return ready-to-attach columns — the object itself is never downloaded), `s3_delete_object`; and `export_to_s3` — export a whole table/view straight into a connection's bucket, reusing the scoped export-table pipeline (per-key scope, RLS, impersonation, 50M-row cap) and waiting up to `S3:ExportToS3WaitSeconds` (default 300s) for completion. On SQL Server 2022+ tenants the attach tools mirror the REST attach endpoints: `s3_list_attached` (attached external tables + the capability probe), `s3_attach_table` (attach a parquet/CSV object or folder prefix as a queryable external table in the connection's `[s3_<id>]` schema; omit `columns` to auto-discover the schema, same as the UI), and `s3_detach_table` (drop the external table; the S3 object is untouched). Reads use the `data.ingest.*` view tier; writes (create/delete/upload/delete-object/export/attach/detach) require `data.ingest.manage`.
+- **Views (DDL)** — `list_views`, `get_view` (definition + round-trippable `selectStatement`), `create_view` / `alter_view` (send ONLY the inner SELECT — the server wraps it as `CREATE/ALTER VIEW [schema].[name] AS …`, identifier-validated), `drop_view` (destructive → `confirm:true`). Same permissions as the REST endpoints (`views.view` / `views.create` / `views.edit` / `views.delete`), audited as `CREATE_VIEW`/`ALTER_VIEW`/`DROP_VIEW` exactly like the UI path; view changes reach the live Data API on the next Regenerate / Restart DAB.
+- **Tables (DDL)** — `create_table` (explicit column design: `columns:[{name,type,size?,precision?,scale?,nullable?,default?,identity?,unique?,primaryKey?}]` + a top-level `primaryKey:[...]` — the explicit alternative to `ingest_table` type-inference), `drop_table` (destructive), `add_column` / `alter_column` / `drop_column` (single-column `ALTER TABLE`; `drop_column` destructive). Same validation and DLO system/shadow-table protection as `POST/PUT/DELETE /api/ddl/tables`; permissions `tables.create` / `tables.delete` / `tables.edit`; live after `restart_dab`.
+- **Indexes (DDL)** — `create_index` (ordered `columns`, `unique?`), `drop_index` (destructive; a PRIMARY KEY index and DLO system/shadow tables are refused). Mirrors `/api/ddl/indexes`; permissions `indexes.create` / `indexes.delete`.
+- **Full-text search (DDL)** — `fulltext_status`, `fulltext_eligibility`, `create_fulltext_catalog`, `create_fulltext_index` (`columns`, `changeTracking?` AUTO|MANUAL|OFF), `drop_fulltext_index` (destructive). Mirrors `/api/ddl/fulltext`, reusing the Indexes gates (`indexes.view` / `indexes.create` / `indexes.delete`).
+- **Functions (DDL)** — `list_functions`, `create_function` (`functionType` SCALAR|INLINE_TABLE, `parameters?`, `returnType?`, `body`), `drop_function` (destructive; system functions protected). Mirrors `/api/ddl/functions`; permissions `functions.view` / `functions.create` / `functions.delete`.
+- **Stored procedures (DDL)** — `list_procedures`, `create_procedure` (`parameters?` with `direction` INPUT|OUTPUT, `body`), `drop_procedure` (destructive; reserved system procedures refused). Mirrors `/api/ddl/stored-procedures`; permissions `stored-procedures.view` / `stored-procedures.create` / `stored-procedures.delete`.
+- **Triggers (DDL)** — `create_trigger` (form-defined: `timing`, event flags, an `action` of `INSERT_INTO_TABLE`/`VALIDATE_AND_REJECT`/`UPDATE_COLUMN`, optional `condition` — no free-form SQL), `drop_trigger` (destructive; reserved system/change-log triggers protected). Mirrors `/api/ddl/triggers`; permissions `triggers.create` / `triggers.delete`.
+- **Schemas (DDL)** — `list_schemas` (with an `isProtected` flag), `create_schema`, `drop_schema` (destructive; `dbo`/`DLO`/`sys`/`guest`/`db_*` protected, and a non-empty schema fails with the SQL error). Mirrors the DCL `/api/dcl/schemas` endpoints; permissions `schemas.view` (list) / `schemas.manage` (create + drop).
+- **KB semantic-search admin** — `sync_kb_search_views` (zero-drop (re)create of the per-KB `vw_search_contenthub_<Code>` views; obsolete views reported, never dropped — `views.create`), `grant_kb_search_view` (GRANT/`revoke:true` SELECT on a KB view to an API key's DB principal — `views.edit`). Mirrors `/api/ddl/search/kb-views/*`; SQL 2025+ engine-gated.
 
-- **Tables & columns** (5) — `create_table` (explicit column design: `columns:[{name,type,size?,precision?,scale?,nullable?,default?,identity?,unique?,primaryKey?}]` plus a top-level `primaryKey:[...]` — the explicit alternative to letting `ingest_table` infer types), `drop_table`, `add_column`, `alter_column`, `drop_column`.
-- **Views** (5) — `list_views`, `get_view` (returns the definition plus a round-trippable `selectStatement`), `create_view` / `alter_view` (send **only** the inner SELECT — the server wraps it as `CREATE`/`ALTER VIEW`), `drop_view`.
-- **Indexes** (2) — `create_index` (ordered `columns`, optional `unique`), `drop_index` (a primary-key index is refused).
-- **Full-text search** (5) — `fulltext_status` (is full-text available, does the catalog exist, what is indexed), `fulltext_eligibility` (can this table carry a full-text index, and which columns qualify), `create_fulltext_catalog` (idempotent, once per tenant), `create_fulltext_index` (`columns`, `changeTracking` AUTO | MANUAL | OFF), `drop_fulltext_index`.
-- **Functions** (3) — `list_functions`, `create_function` (`functionType` SCALAR | INLINE_TABLE, `parameters?`, `returnType?`, `body`), `drop_function`.
-- **Stored procedures** (3) — `list_procedures`, `create_procedure` (`parameters?` with `direction` INPUT | OUTPUT, `body`), `drop_procedure`.
-- **Triggers** (2) — `create_trigger` (form-defined: `timing`, event flags, an `action` of `INSERT_INTO_TABLE` / `VALIDATE_AND_REJECT` / `UPDATE_COLUMN`, optional `condition` — no free-form SQL), `drop_trigger`.
-- **Schemas** (3) — `list_schemas` (each with an `isProtected` flag), `create_schema`, `drop_schema` (a non-empty schema fails with the SQL error, and `dbo` / `DLO` / system schemas are never droppable).
-- **Knowledge-base search views** (2) — `sync_kb_search_views` ((re)creates the per-knowledge-base semantic-search views over your synced AI corpus; obsolete views are reported, never dropped), `grant_kb_search_view` (grant — or `revoke:true` — one API key the right to search one knowledge base). Requires a SQL Server 2025 tenant.
-
-**Publishing it — 13 tools.**
-
-- **Entity exposure / DAB** (6) — `list_exposed_entities`, `set_entity_exposure`, `get_entity_settings`, `set_entity_settings` (per-entity settings incl. column meanings), `restart_dab`, `dab_status`.
-- **GraphQL relationships** (3) — `list_relationships`, `set_relationship` (upsert; **validates both entities and both columns exist** in your schema — a bad name is rejected so it can't crash-loop the engine), `delete_relationship`. A declared parent/child link nests the child under the parent (cardinality `many` by default) and the parent under the child (`one`) in the Data API's GraphQL. Changes are **not** auto-applied — they take effect on the next Regenerate / Restart DAB.
-- **Business definitions for AI** (4) — `get_nl_definitions`, `put_nl_definitions`, `export_nl_definitions`, `import_nl_definitions` (export/import round-trips a schema skeleton an external AI can fill).
-
-**Getting data in and keeping it honest — 17 tools.**
-
-- **Import / sync setup** (8) — `list_connections` (secrets never returned), `list_source_entities` (live source re-discovery), `get_entity_sync_config`, `save_entity_sync_config` (validates change-tracking-mode preconditions), `run_entity_sync`, `get_run_history` (runs incl. destination row counts + notes), `verify_entity_integrity` (read-only full-snapshot source-vs-Lake diff for one connector-pull entity — no writes), `pause_connection` (pause or resume one connector: while paused it claims no scheduled runs and refuses agent claims benignly — no failed runs, no parked entities — and an in-flight run still finishes).
-- **Maintenance window** (2) — `get_maintenance`, `set_maintenance` (`active:true` pauses **all** import/sync activity for the tenant — scheduled runs, streaming, agent claims — for a source-system reboot or patch window; in-flight runs still finish and queued work resumes cleanly when you clear it; an optional `note` is shown in the UI banner). Per-connector state is never mutated, so clearing restores exactly what was running before.
-- **On-prem agent** (2) — `get_agent_status` (last seen, version, streaming diagnostics), `trigger_agent_update` (`cancel:true` withdraws a pending push).
-- **Status** (2) — `get_schema_status` (this tenant), `get_data_quality_summary`.
-- **Data-quality rules** (3) — `list_dq_rules`, `set_dq_rule` (upsert), `delete_dq_rule`. Rule types: `min_row_count` (`{"minRows":N}`), `not_null` (`{"columns":["a","b"]}`), `freshness_max_age_hours` (`{"timestampColumn":"ModifiedUtc","maxAgeHours":24}`), `null_rate` (`{"column":"email","thresholdPct":5}`), `row_count_drift` (`{"thresholdPct":20}`), and `row_count_parity` (`{"tolerancePct":1}` and/or `{"toleranceRows":10}`). `row_count_parity` tunes the full-mirror source-vs-destination check that runs *during* a sync: set `enabled:false` to silence its warning for the entity, or a tolerance to allow small drift; with no rule row present, parity behaves exactly as before. All other types are also evaluated on the platform's data-quality schedule.
-
-**Change history, events and delivery — 17 tools.**
-
-- **Events (row-change capture)** (4) — `list_event_captures`, `enable_event_capture` (installs the capture trigger + column map; idempotent), `disable_event_capture`, `refresh_event_capture` (rebuild the column map/trigger after raw-SQL column changes).
-- **Webhooks** (5) — `list_webhook_subscriptions` (tenant-wide; secrets never returned), `create_webhook_subscription` (URL is SSRF-checked before storage; **returns the signing secret exactly once — store it, it can never be retrieved again**), `update_webhook_subscription` (URL re-checked; `enabled:false` pauses delivery), `delete_webhook_subscription`, `get_webhook_delivery_status` (cursor, failure streak, dead-letters).
-- **Time Travel / change tracking / change logging** (8) — `get_table_history_status` (one-call posture for all three), `enable_time_travel` (needs a PK; mutually exclusive with Concurrency Protection), `disable_time_travel` (`dropHistory:true` also drops the history table), `query_row_history` (one row's full version timeline by PK, RLS-scoped, **capped at 200 versions**, default 50), `enable_change_tracking` / `disable_change_tracking` (omit `table` for the database level), `enable_change_logging` / `disable_change_logging` (shadow table + trigger; `dropShadow:true` also drops the shadow data).
-
-**Access & identity — 16 tools.**
-
-- **RLS / permissions / roles** (5) — `list_rls_policies` (read-only — creating/dropping policies stays in UI/REST), `get_permission_matrix`, `grant_permission` / `revoke_permission` (target a role *or* one user as an override), `list_roles`.
-- **API keys** (8) — `list_api_keys` (metadata only, no hashes; each row includes its **project**, and an optional `project` arg filters to one project), `revoke_api_key`, `create_api_key` (mints for the calling admin by default, or pass `targetUserId` to own it by another user — admin-only, same escalation guard as the UI; pass `project` to file the key under a project — get-or-create by name, case-insensitive, grouping only; `expirationDays` must be 7/30/90/180; **returns the raw key exactly once — only its hash is stored**), `extend_api_key` (push a key's expiry out by 7/30/90/180 days — `max(now, current) + days`; refuses a revoked key), `unrevoke_api_key` (restore a revoked key; leaves the expiry untouched, so a still-expired key must then be extended), `get_key_rights`, `set_key_rights` (denylist model — removals only, applied at each exchange/refresh), `set_key_entity_scopes` (empty scope = full access; a non-empty scope also locks the key out of this admin plane).
-- **Users** (3) — `list_users` (read-only, no hashes), `activate_user`, `deactivate_user` (the tenant owner and your own account are refused).
-
-**Object storage — 13 tools.**
-
-- **Connections** (4) — `list_s3_connections`, `create_s3_connection` (the secret is write-only and redacted in the result), `test_s3_connection`, `delete_s3_connection`.
-- **Files** (5) — `s3_list_objects` (continuation-token paging), `s3_upload` / `s3_download` (base64, with a hard **8 MB** cap per call — larger files go through `dlake s3 put` / `get` or the UI), `s3_delete_object`, and `export_to_s3` (export a whole table or view straight into a connection's bucket through the normal scope- and RLS-enforced export pipeline, including its 50M-row cap; the call waits up to 5 minutes for the job by default).
-- **External tables, SQL Server 2022+** (4) — `s3_discover_schema` (read a parquet footer or CSV head and get ready-to-attach columns back — the object itself is never downloaded), `s3_list_attached` (what is attached, plus a capability probe that explains itself on a pre-2022 tenant), `s3_attach_table` (attach a parquet/CSV object or folder prefix as a queryable external table in the connection's own `s3_<id>` schema; omit `columns` to auto-discover, same as the UI), `s3_detach_table` (drops the external table; the S3 object is untouched).
-
-Reads (list / browse / download / test / discover) use the ingest view tier; writes (create, delete, upload, delete-object, export, attach, detach) require `data.ingest.manage`.
-
-**Search & AI — 3 tools.**
-
-- **Embeddings** (3) — `get_embeddings_settings` (whether a provider is configured, a masked last-4 key hint, and the resolved endpoint / model / dimensions), `set_embeddings_settings` (point document semantic search at OpenAI or a local Ollama; the API key is write-only and kept if omitted — note that changing the model or dimensions invalidates existing embeddings, so re-embed afterwards), `test_embeddings` (one tiny live call: confirms connectivity and that the returned vector width matches what you configured).
-
-**Operations & records — 7 tools.**
-
-- **Export jobs** (2) — `list_export_jobs`, `cancel_export_job` (this tenant's running jobs only).
-- **Audit** (1) — `query_audit_log` (every schema/admin operation, including `mcp-admin:*`; filter by operation/target/user; **capped at 200 rows**, default 50).
-- **Notifications** (1) — `list_notifications` (the calling user's in-app notifications + unread count).
-- **Docs** (2) — `get_help_docs` (optional `section`), `get_api_guide` — return this Help / the API guide as markdown (mirror of the data plane's `getHelpDocs` / `getAPIGuide`).
-- **Schema sweep** (1) — `run_schema_sweep` (re-applies the platform's own schema upkeep to **this tenant's database only** — the self-heal that normally runs by itself; `includeManual:true` also applies the steps that are held back for an operator to approve).
-
-**Destructive tools** — `restart_dab`, `revoke_api_key`, `delete_dq_rule`, `delete_relationship`, removing an entity via `set_entity_exposure`, `import_nl_definitions` with `mode:"replace"`, `disable_event_capture`, `delete_webhook_subscription`, `disable_time_travel`, `disable_change_tracking`, `disable_change_logging`, `deactivate_user`, `delete_s3_connection`, `s3_delete_object`, `run_schema_sweep`, and every schema *drop* — `drop_table`, `drop_column`, `drop_view`, `drop_index`, `drop_fulltext_index`, `drop_function`, `drop_procedure`, `drop_trigger`, `drop_schema` — require `confirm: true`. Config changes to exposure/settings/meanings/relationships persist immediately but reach the live Data API only after `restart_dab`. Revoking a key takes effect immediately and flushes the tenant's cached MCP proxy tokens (an already-issued proxy token may otherwise linger to its ~55-minute cache window). `create_api_key` and `create_webhook_subscription` each return their secret **once** in the tool result — capture it immediately. Every admin write is audited as `mcp-admin:<tool>`.
+**Destructive tools** — `restart_dab`, `revoke_api_key`, `delete_dq_rule`, `delete_relationship`, removing an entity via `set_entity_exposure`, `import_nl_definitions` with `mode:"replace"`, `disable_event_capture`, `delete_webhook_subscription`, `disable_time_travel`, `disable_change_tracking`, `disable_change_logging`, `deactivate_user`, `delete_s3_connection`, `s3_delete_object`, `drop_view`, `drop_table`, `drop_column`, `drop_index`, `drop_fulltext_index`, `drop_function`, `drop_procedure`, `drop_trigger`, `drop_schema`, and `run_schema_sweep` — require `confirm: true`. Config changes to exposure/settings/meanings/relationships persist immediately but reach the live Data API only after `restart_dab`. Revoking a key takes effect immediately and flushes the tenant's cached MCP proxy tokens (an already-issued proxy token may otherwise linger to its ~55-minute cache window). `create_api_key` and `create_webhook_subscription` each return their secret **once** in the tool result — capture it immediately. Every admin write is audited as `mcp-admin:<tool>`.
 
 > **After this update, restart your MCP client.** An MCP client caches the tool list per session (it pulls the schema once at connect), so Claude Desktop / claude.ai won't show the new tools until you restart the client or re-add the connector.
 
@@ -267,22 +307,10 @@ Reads (list / browse / download / test / discover) use the ingest view tier; wri
 
 - [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/win-x64/dlake.exe)
 - [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-x64/dlake)
-- [Linux arm64](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-arm64/dlake)
+- [Linux ARM64 (linux-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-arm64/dlake)
 - [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/osx-arm64/dlake)
 - [macOS Intel (osx-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/osx-x64/dlake)
 - [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/SHA256SUMS) · or `npm install -g @commercient/dlake`
-
-Five platforms are supported — Windows x64, Linux x64, Linux arm64, macOS Apple Silicon, and macOS Intel; the npm wrapper and the CLI's own self-update both resolve the right one automatically.
-
-**Sign up from the terminal** — `dlake register` creates a Commercient Data Lake \ Data Hub account with no existing account, key, or browser session:
-
-```bash
-dlake register start --email you@company.com --company "Acme Inc" --phone +15551234567
-dlake register status --watch          # email verified -> provisioned -> seeded
-dlake register resend                  # re-send the verification email
-```
-
-The password comes from a hidden prompt (or `--password-stdin` for scripts) and is deliberately not accepted as a command-line flag, so it never lands in shell history or the process list. `--instance-type <erp>` is optional and defaults to the Data Lake. You click **one** verification link in the email; everything after that runs by itself — `register status` reports each stage, and a second email carries your Data Lake welcome message with the tenant owner's temporary password. On the first status poll after your lake is seeded the CLI prints a **once-only, 7-day, full owner-admin API key** and saves it into your profile, so the same terminal immediately drives both the data plane (`dlake tool …`) and the control plane (`dlake admin …`, including `create_schema` / `create_table`). Copy that key when it is shown — it is never displayed again. Registration is CLI/REST only by design: there is no MCP equivalent, because an MCP connection is tenant-scoped and needs a key that cannot exist before you register.
 
 **Sign in once per tenant** with an API key (generate one under Settings → API Keys), then work:
 
@@ -293,33 +321,16 @@ dlake query "SELECT TOP 10 * FROM DLO.MyTable"    # read-only SQL (RLS-scoped)
 dlake export MyTable --format parquet -o my.parquet
 dlake s3 put sales ./my.parquet exports/       # stream a file to an S3 bucket
 dlake s3 export sales MyTable --format parquet # export a table straight to S3
-dlake s3 attach sales --table Orders --location data/orders.csv  # attach an S3 file as an external table (SQL 2022+)
-dlake s3 discover sales data/orders.csv        # preview the schema attach would discover
-dlake view create MyView --select "SELECT ..." # SQL views in the active schema (list/show/create/alter/drop)
+dlake docs upload invoice.pdf --title "March invoice" --keywords billing
+dlake docs upload photo.png --markdown desc.md  # supply a description so an image is searchable
+dlake docs search "unpaid invoices" --top 5
 dlake admin list                                  # every admin-plane tool, driven generically
 dlake admin dab_status
 ```
 
-Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 116 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, table-to-S3 export, and — on SQL Server 2022+ tenants — `attached`/`attach`/`detach`/`discover` for S3-backed external tables: columns auto-discovered server-side unless `--columns-file` supplies a JSON array of `{"name","type"}`; `attach` needs `data.ingest.manage`). `dlake view …` manages SQL views in the active schema (`list|show|create|alter|drop`; `views` also works): the SELECT you pass — `--select` inline or `--select-file` — is the view **body only** (the server wraps it in `CREATE/ALTER VIEW`), permissions are `views.view/create/edit/delete`, and after create/alter/drop the change reaches the Data API on the next **Regenerate / Restart DAB**.
+**Passing argument values.** `dlake admin <tool>` / `dlake tool <tool>` map `--arg value` onto each tool's JSON schema. Booleans take `true/false/1/0/yes/no`; an arg whose type is an **array or object** takes **JSON** — `--columns '[{"name":"Id","type":"INT","identity":true,"primaryKey":true}]'` — or, better, **`@file.json`** to read the value from a file: `--columns @columns.json`. `@file` works for **any** argument (and is the reliable form on Windows, where the shell mangles quoted JSON); `@@` passes a literal leading `@`. Simple lists still accept the comma form (`--columns sku,region`, `--ids 1,2,3`). `dlake admin <tool> --help` prints the schema and repeats these conventions.
 
-**Argument conventions** (`dlake admin <tool>` / `dlake tool <tool>`). Scalars are passed plainly (`--table Invoice`). An argument the tool declares as an **array or object** accepts JSON — any value starting with `[` or `{` is sent through as-is (`--primaryKey '["Id"]'`) — while a plain comma list still works for arrays of scalars (`--primaryKey Id`); malformed JSON is reported as a usage error naming the argument rather than being silently comma-split. Any argument can also read its value from a file with **`@file`** (`--columns @columns.json`; one trailing newline is trimmed, a missing file is a clear usage error naming the argument and path, and `@@` escapes a literal leading `@`). On Windows, `@file` is the recommended form — quoted JSON is mangled by the shell before the CLI sees it. `dlake admin <tool> --help` spells these forms out for every tool that takes an array or object argument.
-
-Worked example — create a table from a columns file:
-
-```json
-[
-  { "name": "Id",         "type": "int",       "identity": true, "nullable": false },
-  { "name": "Number",     "type": "nvarchar",  "size": 50,       "nullable": false, "unique": true },
-  { "name": "Amount",     "type": "decimal",   "precision": 18,  "scale": 2, "nullable": false, "default": "0" },
-  { "name": "CreatedUtc", "type": "datetime2", "nullable": false, "default": "SYSUTCDATETIME()", "isExpression": true }
-]
-```
-
-```bash
-dlake admin create_table --table Invoice --columns @columns.json --primaryKey Id
-```
-
-Column objects take `{ name, type, size?, precision?, scale?, nullable?, default?, isExpression?, identity?, unique?, primaryKey? }`, with the table's key supplied as a top-level `primaryKey` list.
+Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 116 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, and table-to-S3 export).
 
 ## Row-Level Security
 
@@ -404,13 +415,24 @@ editing to keep the stored one. **Test** probes the bucket. Managing connections
 **Bucket browser**: navigate folders with a breadcrumb, see each object's size and
 modified time, **upload** files (streamed straight to S3, no memory buffering),
 **download**, and **delete** (with confirm). Large listings page with **Load more**.
+On attach-capable tenants, parquet/CSV rows also show an **Attach as table** action
+(link icon) — the fastest way to attach (see below).
 
-**Attach (SQL Server 2022+ only)**: pick an object or prefix, choose parquet or CSV
-(with a first-row-header toggle for CSV), name the target table, and define the columns
-(name + T-SQL type). The connector creates a PolyBase external table in a per-connection
-schema (`s3_<id>`, named from the connection's immutable numeric id — renaming the
-connection later never renames or orphans the attached tables) that you can then query
-like any table. The attached-tables list
+**Attach (SQL Server 2022+ only)** — with **schema auto-discovery**: click **Attach as
+table** on a `.parquet`/`.csv` file in the browser and the attach dialog opens with the
+key and format prefilled and the columns **detected automatically** — parquet files are
+self-describing (the server reads just the file's footer, never the whole object) and
+CSV headers are parsed with types inferred from a sample. You land in an editable
+column grid: untick columns to exclude them, rename or retype any column, and columns
+discovery couldn't map (nested parquet lists/structs) are shown greyed-out with the
+reason. The table name defaults to the file name. For CSV files a **Delimiter** select
+appears, preselected to the delimiter detected in the file (comma, semicolon, tab or
+pipe) and overridable — so non-comma CSVs attach and read correctly. For a hand-entered
+object key or prefix, the **Detect schema** button does the same; you can still type
+every column manually if you prefer. The connector creates a PolyBase external table in a
+per-connection schema (`s3_<id>`, named from the connection's immutable numeric id —
+renaming the connection later never renames or orphans the attached tables) that you
+can then query like any table. The attached-tables list
 shows what's linked, with **Detach** (drops the external table; the S3 data is
 untouched). Attaching a table name that is already attached is refused with a clear
 message — detach it first or pick another name. Rotating a connection's AWS keys
@@ -419,10 +441,7 @@ so attached tables keep working after a key rotation. On SQL 2017/2019 tenants t
 attach panel is replaced by an inline note —
 *"Attaching S3 files as external tables requires SQL Server 2022 or later."* — because
 the estate is pre-2022; browse/upload/download still work everywhere. Attach was
-**live-verified on the SQL Server 2025 pilot** (see `docs/s3-connector.md`). The same
-flow is scriptable from the CLI — `dlake s3 attached|attach|detach|discover <connection>`
-— where `discover` previews the server's schema discovery (name/type/nullable plus the
-detected delimiter and warnings) so you can hand-tune a columns file before attaching.
+**live-verified on the SQL Server 2025 pilot** (see `docs/s3-connector.md`).
 
 **Bucket locked down by IP?** PolyBase reads S3 **from the SQL Server's public IP**,
 not the Data Lake app's — an `aws:SourceIp`-restricted bucket policy must also allow
