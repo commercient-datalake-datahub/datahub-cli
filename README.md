@@ -105,7 +105,7 @@ dlake status                        # tenant, key, agent + service health
 
 # API keys & projects
 dlake keys list
-dlake keys create --name ci-reader  # prints the raw key ONCE
+dlake keys create --name ci-reader  # unscoped key; prints the raw key ONCE
 
 # Query & export
 dlake query "SELECT TOP 10 * FROM account" --json
@@ -126,6 +126,92 @@ dlake admin create_table --help     # every tool self-documents its arguments
 
 Run `dlake --help` or `dlake <command> --help` for the full surface.
 
+### Scoped keys need a DAB restart
+
+`dlake keys create` mints an **unscoped** (full-access) key. A key restricted to
+specific entities is minted on the admin plane:
+
+```bash
+dlake admin create_api_key --keyName pizza-web --expirationDays 180 --scope @scope.json
+dlake admin restart_dab --confirm true      # <-- REQUIRED, see below
+```
+
+> **Warning — after creating (or re-scoping) a *scoped* key, run
+> `dlake admin restart_dab --confirm true`.** DAB's running configuration only
+> gains the key's per-key role (`key_<id>`) when it is regenerated; until you
+> restart, the key returns **`403 AuthorizationCheckFailed`** on every request
+> even though the key, its scope, and the entities are all correct. Unscoped /
+> full-access keys are unaffected. In the web UI the same save shows a
+> **"Restart Needed"** notice and waits for you to press **Restart DAB** —
+> restarts are always user-initiated. The restart must be driven by a
+> **full-scope admin** key: a scoped key cannot reach the admin plane, so it can
+> never restart DAB for itself. (Revoking a key is the one exception — it
+> regenerates immediately.)
+
+A scope entry is `{ "entityName": "<table/view/proc>" }` plus one or more action
+booleans — `canRead`, `canCreate`, `canUpdate`, `canDelete`, `canExecute` — with
+an optional `schemaName` for an external/lake schema (omit it for the working
+schema). `entity` is rejected ("empty entityName"), and so is a bare
+`read: true` ("no actions selected").
+
+```json
+[
+  { "entityName": "pizza_menu_items", "canRead": true },
+  { "entityName": "usp_PlaceOrder",   "canExecute": true }
+]
+```
+
+### Build an app end-to-end
+
+The full happy path, in the only order that works — schema, an atomic write, the
+API surface, then a least-privilege key for the front end:
+
+```bash
+dlake login --domain <tenant> --api-key dlk_...          # admin, FULL-SCOPE key
+dlake tool get_active_schema                             # which schema am I in?
+
+dlake admin create_table --tableName pizza_menu_items \
+  --columns @menu_items.json --primaryKey Sku
+dlake admin create_procedure --procedureName usp_PlaceOrder \
+  --parameters @params.json --body @proc.sql
+
+dlake admin set_entity_exposure --entity pizza_menu_items --expose true
+dlake admin set_entity_exposure --entity usp_PlaceOrder   --expose true
+dlake admin restart_dab --confirm true                   # publishes the entities
+
+dlake admin create_api_key --keyName pizza-web --expirationDays 180 --scope @scope.json
+dlake admin restart_dab --confirm true                   # publishes the key's role
+# then, from the app: POST /auth/<tenant>/api/usp_PlaceOrder
+```
+
+Two restarts, not one: the first publishes the **entities**, the second the new
+key's **role**, and the key can only be minted after the entities exist.
+
+Three things that bite on the way through:
+
+- **The data plane sees only *exposed* entities.** `create_table` /
+  `create_procedure` touch your database, not the Data API — `dlake tool
+  create_record --entity pizza_menu_items` returns `EntityNotFound` until
+  `set_entity_exposure --expose true` **and** `restart_dab --confirm true` have
+  both run. Raw-SQL reads (`dlake query`, `dlake tool query`) don't need
+  exposure.
+- **The active schema is read-only from the CLI.** All DDL tools operate on the
+  tenant's **active schema** (usually `DLO`). Read it with `dlake tool
+  get_active_schema`; it is switched **only** from the web UI's schema dropdown —
+  there is no `set_active_schema` tool and no `use` verb. Qualify raw SQL with it
+  (`FROM DLO.pizza_menu_items`), and prefix object names per app to keep several
+  apps tidy in one schema.
+- **Stored-procedure parameter names must start with `@`.**
+  `create_procedure --parameters` rejects `{"name":"CustomerName"}` with *"must
+  start with '@'"* — use `{"name":"@CustomerName","dataType":"NVARCHAR","maxLength":100}`.
+
+Two more small ones: **`ingest_table` needs a natural-key PK** — it refuses a
+table whose primary key is an `IDENTITY` column (*"Row-by-row upsert needs a key
+whose values come from the file"*), so seed identity-keyed tables with
+`create_record` or give the table a natural key; and **avoid reserved T-SQL words
+in column names** — a column called `LineNo` fails because `LINENO` is reserved
+(likewise `Key`, `Order`, `User`, `Percent`).
+
 ## Atomic multi-row writes
 
 Data API writes are **not** transactional — a multi-step write (a header, its line items, a status row)
@@ -133,7 +219,7 @@ can partially succeed and leave orphans. When you need all-or-nothing, put the w
 procedure that wraps `BEGIN TRAN` / `COMMIT` / `ROLLBACK`, expose it, and call it as one request:
 
 ```bash
-dlake admin create_procedure --name usp_PlaceOrder --body @proc.sql --parameters @params.json
+dlake admin create_procedure --procedureName usp_PlaceOrder --parameters @params.json --body @proc.sql
 dlake admin set_entity_exposure --entity usp_PlaceOrder --expose true
 dlake admin restart_dab --confirm true
 ```
@@ -145,7 +231,7 @@ Procedure entities are exposed on `POST` only — a write should not be reachabl
 
 Tool arguments (`dlake admin <tool>` / `dlake tool <tool>`) accept three forms:
 
-- **Scalars** — `--table Invoice`, `--confirm true`.
+- **Scalars** — `--tableName Invoice`, `--confirm true`.
 - **Arrays and objects** — a value starting with `[` or `{` is sent as JSON
   (`--primaryKey '["Id"]'`); a plain comma list still works for arrays of
   scalars (`--primaryKey Id`). Malformed JSON is reported as a usage error
@@ -155,7 +241,7 @@ Tool arguments (`dlake admin <tool>` / `dlake tool <tool>`) accept three forms:
   quoted JSON is mangled by the shell before the program sees it.
 
 ```bash
-dlake admin create_table --table Invoice --columns @columns.json --primaryKey Id
+dlake admin create_table --tableName Invoice --columns @columns.json --primaryKey Id
 ```
 
 `dlake admin <tool> --help` documents these forms for every tool that takes an
@@ -165,6 +251,10 @@ array or object argument.
 
 - **API usage guide** — endpoints, auth, scopes, rate limits: see the Data Lake
   \ Data Hub API guide served from your tenant's Help page.
+- **AI-agent skill** — [`skills/dlake/SKILL.md`](skills/dlake/SKILL.md) is a
+  drop-in skill that teaches a coding agent the correct command ordering and the
+  sharp edges (the scoped-key DAB restart, exposed-vs-raw entities, IDENTITY-key
+  limits). Install notes: [`skills/README.md`](skills/README.md).
 - **Permissions** — object writes and connection management need
   `data.ingest.manage`; reads accept any `data.ingest.*` tier; scoped API keys
   are enforced server-side (fail-closed) down to entity and field level.
