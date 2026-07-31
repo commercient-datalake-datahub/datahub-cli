@@ -322,12 +322,14 @@ Its 116 setup tools:
 
 **Install** — download the self-contained binary for your platform (no runtime needed) and put it on your `PATH`:
 
-- [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/win-x64/dlake.exe)
-- [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-x64/dlake)
-- [Linux ARM64 (linux-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/linux-arm64/dlake)
-- [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/osx-arm64/dlake)
-- [macOS Intel (osx-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/osx-x64/dlake)
-- [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.5.1/SHA256SUMS) · or `npm install -g @commercient/dlake`
+- [Windows (win-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.2/win-x64/dlake.exe)
+- [Linux x64](https://downloads.datalake.commercient.com/downloads/dlake/0.5.2/linux-x64/dlake)
+- [Linux ARM64 (linux-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.2/linux-arm64/dlake)
+- [macOS Apple Silicon (osx-arm64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.2/osx-arm64/dlake)
+- [macOS Intel (osx-x64)](https://downloads.datalake.commercient.com/downloads/dlake/0.5.2/osx-x64/dlake)
+- [SHA256 checksums](https://downloads.datalake.commercient.com/downloads/dlake/0.5.2/SHA256SUMS) · or `npm install -g @commercient/dlake`
+
+**macOS — sign the binary once after downloading.** The Mac builds ship unsigned, so run `xattr -dr com.apple.quarantine ./dlake` then `codesign --force --sign - ./dlake` (then `chmod +x ./dlake`). On Apple Silicon this is required for reliability, not just for Gatekeeper: an unsigned binary is validated page-by-page as it runs and can abort **intermittently at startup** — `System.AccessViolationException ... at Thread+StartHelper.InitializeCulture()`, typically on rapid back-to-back invocations, where a retry succeeds. Ad-hoc signing removes it. (The `InitializeCulture` frame is misleading: `dlake` runs with invariant globalization on every platform, so there is no culture data involved.)
 
 **Sign in once per tenant** with an API key (generate one under Settings → API Keys), then work:
 
