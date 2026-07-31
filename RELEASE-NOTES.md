@@ -1,5 +1,43 @@
 # dlake release notes
 
+## 0.5.2 — 2026-07-31
+
+- **macOS: intermittent startup abort explained and documented.** A field report
+  from macOS arm64 had `dlake` hard-failing at process start roughly one
+  invocation in six on rapid back-to-back runs — always transient, any command,
+  gone when calls were spaced ~2s apart:
+
+  ```
+  Fatal error. System.AccessViolationException: Attempted to read or write protected memory...
+     at System.Threading.Thread+StartHelper.InitializeCulture()
+  ```
+
+  This is **not** a globalization/ICU problem despite the `InitializeCulture`
+  frame — invariant globalization has been compiled into every RID, macOS
+  included, since 0.2.1; that frame is just the first managed code to run on a
+  newly started thread. The cause is that the macOS binaries are cross-built on
+  Windows, where the .NET SDK cannot code sign (it gates ad-hoc signing on
+  running *on* macOS with `/usr/bin/codesign` present), so every macOS artifact
+  up to and including 0.5.1 shipped with **no code signature at all**. Apple
+  Silicon then accepts the binary only via the kernel's implicit ad-hoc path,
+  which validates page hashes lazily as pages fault in — an intermittent,
+  load-sensitive `EXC_BAD_ACCESS`.
+
+  Fix on the user side, once per downloaded binary (also for the npm install):
+
+  ```bash
+  xattr -dr com.apple.quarantine ./dlake
+  codesign --force --sign - ./dlake
+  ```
+
+  Documented in the CLI guide (`dlake guide cli`), the in-app help, and the npm
+  README. `publish-cli.ps1` now ad-hoc signs macOS artifacts when a signer is
+  available (`codesign` on a Mac, or `rcodesign` on any host), verifies the
+  resulting `LC_CODE_SIGNATURE` by parsing the Mach-O, and **warns loudly** when
+  a build produced unsigned macOS binaries. It also emits `SHA256SUMS` beside the
+  per-RID folders instead of leaving that to an ad-hoc script.
+  No behavioural change to any command.
+
 ## 0.5.1 — 2026-07-26
 
 - **Self-service sign-up from the terminal** (previously staged as unreleased
