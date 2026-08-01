@@ -28,7 +28,7 @@ exists). Follow the sequence and rules below and it goes smoothly.
 ```
 dlake login --domain <tenant>                 # auth with a dlk_ API key: env DLAKE_API_KEY | --api-key-stdin | no-echo prompt
 dlake status                                  # tenant + service health
-dlake admin list                              # 116 control-plane tools (DDL, keys, exposure, DAB, RLS, events)
+dlake admin list                              # 126 control-plane tools (DDL, keys, exposure, DAB, RLS, events)
 dlake admin <tool> --help                     # argument schema for one tool
 dlake admin <tool> [--arg value ...]          # invoke it (schema/keys/exposure/etc.)
 dlake tool  list                              # ~23 data-plane tools (records, query, aggregate, ingest, export)
@@ -50,6 +50,7 @@ dlake tool get_active_schema                       # confirm the schema you'll b
 
 # 2. Define schema (operates on the ACTIVE schema)
 dlake admin create_table --tableName <t> --columns @cols.json --primaryKey Id
+dlake admin describe_table --tableName <t>         # read it back: per-column typeToken, nullability, PK, FKs
 dlake admin create_procedure --procedureName <p> --parameters @params.json --body @proc.sql
 
 # 3. Expose every entity you want in the API, THEN apply with a restart
