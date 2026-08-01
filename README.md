@@ -49,8 +49,9 @@ vector features require SQL Server 2022+ / 2025.)
   export tables straight to a bucket, and (on SQL Server 2022+) attach parquet
   and CSV files as queryable external tables with automatic schema discovery.
 
-`dlake` is the terminal/CI way to drive all of it. The full product help lives
-in [docs/help.md](docs/help.md).
+`dlake` is the terminal/CI way to drive all of it. [docs/help.md](docs/help.md) is a
+short overview; the full product help is in the console's Help section and from
+`dlake guide help` once you are signed in (it fetches your tenant's live copy).
 
 - Human-readable tables by default; `--json` everywhere for scripting.
 - Exit codes: **0** ok, **1** error, **2** usage, **3** permission/auth denied.
