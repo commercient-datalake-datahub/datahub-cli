@@ -1,5 +1,16 @@
 # dlake release notes
 
+## 0.5.3 (2026-08-01)
+
+- Tool-call errors are no longer mislabeled as session failures: the `MCP session
+  handshake failed.` prefix now appears only on genuine handshake/session errors.
+  Ordinary tool failures print the server's own message (`MCP error -32000: Aggregate
+  failed: ...`), so validation problems read as what they are.
+- `dlake entities list` gains a SERVED column (yes/NO/?) plus a warning line when the
+  persisted DAB scope differs from what the container is actually serving - presence in
+  the list no longer implies the entity is live.
+- Embedded guide and download links updated to 0.5.3. macOS binaries are ad-hoc signed
+  (as introduced in 0.5.2).
 ## 0.5.2 — 2026-07-31
 
 - **macOS: intermittent startup abort explained and documented.** A field report
