@@ -1,5 +1,19 @@
 # dlake release notes
 
+## 0.5.4 (2026-08-12)
+
+- Registration and self-update now default to the public host
+  `datalake-ms-dab.commercient.com`. The previous default
+  (`downloads.datalake.commercient.com`) sits behind the estate's
+  bot-verification layer, which redirects a bare request to a verification page:
+  a browser clears it and never notices, but `dlake register` and the installer
+  have no cookie jar and (correctly, fail-closed) refuse the unexpected host. So
+  onboarding and CLI updates failed from any network that gets challenged. Same
+  bytes, same origin, no such layer. Override with `--api-base` /
+  `DLAKE_DOWNLOAD_BASE` as before.
+- No change to how the CLI authenticates or reaches the data and control planes:
+  register once, then the returned admin key drives the MCP-wrapped commands.
+
 ## 0.5.3 (2026-08-01)
 
 - Clearer error messages for tool calls.
