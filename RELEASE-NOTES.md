@@ -13,6 +13,11 @@
   `DLAKE_DOWNLOAD_BASE` as before.
 - No change to how the CLI authenticates or reaches the data and control planes:
   register once, then the returned admin key drives the MCP-wrapped commands.
+- macOS binaries are ad-hoc code signed, as in 0.5.2 and 0.5.3. (The first
+  0.5.4 upload was briefly UNSIGNED because the signer was not on PATH during
+  the build; the artifacts and the GitHub release assets were replaced with
+  signed builds and the checksum manifests reissued. If you pulled an
+  osx-arm64/osx-x64 binary in that window, re-download it.)
 
 ## 0.5.3 (2026-08-01)
 
