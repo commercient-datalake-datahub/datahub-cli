@@ -73,7 +73,7 @@ the `dlake` command.
 
 Grab the binary for your platform from the latest
 [Release](../../releases/latest) (or from
-`https://downloads.datalake.commercient.com/downloads/dlake/<version>/<rid>/dlake[.exe]`),
+`https://datalake-ms-dab.commercient.com/downloads/dlake/<version>/<rid>/dlake[.exe]`),
 verify it against `SHA256SUMS`, and put it on your `PATH`.
 
 | Platform | Asset |
@@ -264,7 +264,7 @@ array or object argument.
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `DLAKE_DOWNLOAD_BASE` | `https://downloads.datalake.commercient.com/downloads/dlake` | Binary mirror base (npm installs) |
+| `DLAKE_DOWNLOAD_BASE` | `https://datalake-ms-dab.commercient.com/downloads/dlake` | Binary mirror base (npm installs) |
 | `DLAKE_VERSION` | npm package version | Pin a specific binary version (same or newer only) |
 | `DLAKE_SHA256` | — | Operator-pinned expected digest (64 hex) for air-gapped installs |
 | `DLAKE_ALLOW_MIRROR_CHECKSUMS` | off | Take `SHA256SUMS` from the mirror too (unsafe) |
@@ -281,7 +281,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 The npm `postinstall` verifies automatically, and its integrity chain does not
 follow the mirror: pointing `DLAKE_DOWNLOAD_BASE` at a private mirror moves the
 **binary** only — `SHA256SUMS` is still fetched from
-`downloads.datalake.commercient.com`, so a mirror can only serve bytes the
+`datalake-ms-dab.commercient.com`, so a mirror can only serve bytes the
 publisher already vouched for. Air-gapped installs pin `DLAKE_SHA256=<digest>`
 (recommended) or opt into `DLAKE_ALLOW_MIRROR_CHECKSUMS=1`, which transfers full
 trust to the mirror host and prints a warning. An older `DLAKE_VERSION` than the
