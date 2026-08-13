@@ -2,22 +2,13 @@
 
 ## 0.5.4 (2026-08-12)
 
-- Registration and self-update now default to the public host
-  `datalake-ms-dab.commercient.com`. The previous default
-  (`downloads.datalake.commercient.com`) sits behind the estate's
-  bot-verification layer, which redirects a bare request to a verification page:
-  a browser clears it and never notices, but `dlake register` and the installer
-  have no cookie jar and (correctly, fail-closed) refuse the unexpected host. So
-  onboarding and CLI updates failed from any network that gets challenged. Same
-  bytes, same origin, no such layer. Override with `--api-base` /
-  `DLAKE_DOWNLOAD_BASE` as before.
-- No change to how the CLI authenticates or reaches the data and control planes:
-  register once, then the returned admin key drives the MCP-wrapped commands.
-- macOS binaries are ad-hoc code signed, as in 0.5.2 and 0.5.3. (The first
-  0.5.4 upload was briefly UNSIGNED because the signer was not on PATH during
-  the build; the artifacts and the GitHub release assets were replaced with
-  signed builds and the checksum manifests reissued. If you pulled an
-  osx-arm64/osx-x64 binary in that window, re-download it.)
+- Registration and updates now use `datalake-ms-dab.commercient.com`. On some
+  networks the old host could block `dlake register`, `npm install` and CLI
+  updates; the new host works everywhere. No action needed — override with
+  `--api-base` / `DLAKE_DOWNLOAD_BASE` if you use a custom host.
+- No changes to commands, authentication, or workflows.
+- macOS binaries are code signed as usual. If you downloaded a macOS build on
+  2026-08-12 and it fails to start, simply re-download it.
 
 ## 0.5.3 (2026-08-01)
 
