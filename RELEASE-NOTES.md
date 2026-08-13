@@ -1,5 +1,16 @@
 # dlake release notes
 
+## 0.5.5 (2026-08-13)
+
+- New: `dlake register login --email <you>` — resume a registration from any
+  machine. Signs back in with the password you chose at `register start` and
+  refreshes the saved token, so `register status` and `register resend` work
+  again with no flags. Use `--password-stdin` for scripts; you'll be prompted
+  otherwise.
+- After your Data Lake is seeded, the registration wizard (CRM and ERP connector
+  setup) can also be driven through `dlake admin` — run `dlake admin list` and
+  look for the `registration_*` tools.
+
 ## 0.5.4 (2026-08-12)
 
 - Registration and updates now use `datalake-ms-dab.commercient.com`. On some
