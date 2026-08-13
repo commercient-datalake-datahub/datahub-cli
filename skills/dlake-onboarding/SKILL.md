@@ -185,15 +185,35 @@ sync-agent choice and the Connection Manager record all follow the declared ERP.
 
 Step 5 is guarded on step 4 being finalized — same 409 shape as before.
 
-**Connector credentials are not validated at submit.** They are stored and exercised when
-provisioning runs, so a typo surfaces there rather than here. Get them right before provisioning.
-
 Then run it:
 
 ```bash
 dlake admin registration_connector_provision
 dlake admin registration_provisioning_status              # poll until completed or failed
 ```
+
+### Placeholder ERP details are fine — this is the normal case
+
+Customers frequently do not have their ERP server, database and credentials to hand at this point,
+and waiting for them blocks nothing. **Submit placeholders and move on.** Neither `connector_submit`
+nor `connector_provision` opens a connection to the ERP: submit parks the configuration, and
+provisioning sets up the tenant around it. A provisioning run completes normally with placeholder
+values.
+
+Do not read that completion as "the ERP connection works" — it means the tenant is configured. The
+credentials are exercised when data actually syncs.
+
+When the real details arrive, submit them again. There is no separate update verb and no need to
+redo anything else:
+
+```bash
+dlake admin registration_connector_submit \
+    --connectorType SQL2008ABOVE --erpName SYSPRO7 --fields @real-fields.json
+```
+
+Re-submitting is accepted at any point, including after provisioning has completed. `erpChanged`
+reports whether the **ERP itself** changed, so it is `false` when you re-submit the same ERP with
+corrected connection values — that is success, not a rejection.
 
 ## 8. Resuming later
 
@@ -244,7 +264,10 @@ API key — so the two are independent and you rarely need both.
 - **Assuming the wizard steps are independent.** They are ordered and guarded; a 409 naming a step is
   an instruction, not a failure.
 - **Letting the 7-day bootstrap key expire mid-setup.** Mint a durable key early.
-- **Expecting connector credentials to be checked at submit.** They are checked at provisioning.
+- **Waiting on the customer's ERP credentials before finishing setup.** Don't — submit placeholders,
+  provision, and re-submit the real values later.
+- **Reading a completed provisioning run as proof the ERP connection works.** It isn't; the
+  credentials are exercised when data syncs.
 - **`--fields` as a JSON string.** It takes an object; use `@file.json`.
 - **Treating a deferred OAuth connection as a blocked setup.** It isn't — finish the rest and
   connect the CRM when the customer is ready.
