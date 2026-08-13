@@ -1,5 +1,33 @@
 # dlake release notes
 
+## 0.5.6 (2026-08-13)
+
+- **Fixed: `dlake admin` and `dlake tool` now work from any network.** They used
+  to fail with `'<' is an invalid start of a value` unless you were on an
+  allowlisted network. Both now go through the public host, so a new customer can
+  drive the setup wizard from anywhere. Just upgrade — nothing to reconfigure.
+- **Better errors when something blocks you.** If a network filter answers instead
+  of the API, `dlake` now says so and tells you what to ask support for, rather
+  than printing a parser error. `dlake status` no longer reports a service as
+  "down" when it is your network being challenged.
+- **`dlake status` shows each host separately**, so you can see at a glance which
+  commands will work.
+- **After registering, the CLI now tests your new API key** instead of just
+  claiming everything works.
+- **Clearer guidance when you have no profile yet** — if your registration is
+  still finishing, it points you at `dlake register status` instead of a login you
+  cannot complete.
+- `dlake profile` now works as well as `dlake profiles`.
+- Help fixes: `--phone` is marked required; the scripted sign-up example keeps the
+  password you will need later to resume; the two progress numbers now say what
+  each one measures.
+- **`SHA256SUMS` verifies correctly on Linux and macOS.** It shipped with Windows
+  line endings, so `sha256sum -c` reported every file as failed even when the
+  download was fine.
+
+Still requires an allowlisted network: `query`, `export`, `views`, `s3`, `keys`,
+`projects`. `dlake` now tells you when that is what you are hitting.
+
 ## 0.5.5 (2026-08-13)
 
 - New: `dlake register login --email <you>` — resume a registration from any
