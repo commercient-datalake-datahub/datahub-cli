@@ -28,7 +28,7 @@ exists). Follow the sequence and rules below and it goes smoothly.
 ```
 dlake login --domain <tenant>                 # auth with a dlk_ API key: env DLAKE_API_KEY | --api-key-stdin | no-echo prompt
 dlake status                                  # tenant + service health
-dlake admin list                              # 126 control-plane tools (DDL, keys, exposure, DAB, RLS, events)
+dlake admin list                              # 140 control-plane tools (DDL, keys, exposure, DAB, RLS, events, registration wizard)
 dlake admin <tool> --help                     # argument schema for one tool
 dlake admin <tool> [--arg value ...]          # invoke it (schema/keys/exposure/etc.)
 dlake tool  list                              # ~23 data-plane tools (records, query, aggregate, ingest, export)
@@ -120,7 +120,15 @@ dlake admin restart_dab --confirm true                             # ← REQUIRE
 9. **Registration and passwords are the user's to enter.** `dlake register start` creates an account
    and takes a portal password (`--password-stdin` or a prompt) — hand that step to the user; don't
    run it for them. (`dlake register status --watch` then surfaces the once-only 7-day bootstrap
-   owner-admin key and saves it to a profile.)
+   owner-admin key and saves it to a profile.) A lost/expired registration token is recovered with
+   `dlake register login --email <them>` — again the user types the password. Once the Data Lake is
+   seeded, the registration WIZARD (CRM + ERP connector setup, steps 4-5) is drivable with the
+   tenant key through `dlake admin` — the `registration_*` tools: `registration_state` reports
+   `CurrentStep` and routes you; catalogs are read tools; `registration_crm_connect` /
+   `registration_connector_submit` take `fields` as a JSON OBJECT (never a pre-encoded string), and
+   `registration_connector_submit` accepts an optional `erpName` to override the registration's ERP.
+   The same rule applies: CRM/ERP credentials inside `fields` are the user's to supply — never
+   invent or reuse values from elsewhere.
 
 ## Choosing a write path
 
