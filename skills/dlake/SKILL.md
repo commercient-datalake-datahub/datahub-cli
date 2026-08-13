@@ -124,7 +124,9 @@ dlake admin restart_dab --confirm true                             # ← REQUIRE
    `dlake register login --email <them>` — again the user types the password. Once the Data Lake is
    seeded, the registration WIZARD (CRM + ERP connector setup, steps 4-5) is drivable with the
    tenant key through `dlake admin` — the `registration_*` tools: `registration_state` reports
-   `CurrentStep` and routes you; catalogs are read tools; `registration_crm_connect` /
+   `CurrentStep` and routes you; if it has not passed step 3, run
+   `registration_capture_server_ip --ipAddress <the user's server/public IP>` first (the CRM step
+   is guarded on it); catalogs are read tools; `registration_crm_connect` /
    `registration_connector_submit` take `fields` as a JSON OBJECT (never a pre-encoded string), and
    `registration_connector_submit` accepts an optional `erpName` to override the registration's ERP.
    The same rule applies: CRM/ERP credentials inside `fields` are the user's to supply — never
