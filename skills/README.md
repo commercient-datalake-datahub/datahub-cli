@@ -10,6 +10,9 @@ and error" into "already knows the happy path."
 | Skill | What it covers |
 |-------|----------------|
 | [`dlake/`](dlake/SKILL.md) | Build and operate a tenant end-to-end: schema → expose → restart → scoped key, the sharp edges (the scoped-key restart, exposed-vs-raw entities, IDENTITY-key limits), and the REST/GraphQL + events contract — all in one [`SKILL.md`](dlake/SKILL.md). |
+| [`dlake-onboarding/`](dlake-onboarding/SKILL.md) | Stand up a NEW integration: register a tenant, seed it, then drive the setup wizard — server IP, CRM (connect now or later, OAuth included), and the ERP connector that declares Syspro/QuickBooks/SQL Server/ODBC. Covers the wizard's ordering and guards, credential lifetimes, and how to resume days later. |
+
+Use `dlake/` for a tenant you already have; use `dlake-onboarding/` for one you are creating.
 
 ## Install
 
@@ -17,14 +20,15 @@ A skill is just a folder. Copy it into the directory your harness scans for skil
 
 | Harness | Skills directory |
 |---------|------------------|
-| **Claude Code / Cowork** | `.claude/skills/dlake/` (per-project) or `~/.claude/skills/dlake/` (global) |
-| **OpenAI Codex** | `~/.codex/skills/dlake/` or your project's skills directory |
-| **OpenCode** | `.opencode/skill/dlake/` |
-| **Other harnesses** | wherever the harness discovers skills — keep the `dlake/SKILL.md` layout intact |
+| **Claude Code / Cowork** | `.claude/skills/<skill>/` (per-project) or `~/.claude/skills/<skill>/` (global) |
+| **OpenAI Codex** | `~/.codex/skills/<skill>/` or your project's skills directory |
+| **OpenCode** | `.opencode/skill/<skill>/` |
+| **Other harnesses** | wherever the harness discovers skills — keep the `<skill>/SKILL.md` layout intact |
 
 ```bash
-# from a clone of this repo
-cp -r skills/dlake ~/.claude/skills/       # e.g. install globally for Claude Code
+# from a clone of this repo — install either or both
+cp -r skills/dlake             ~/.claude/skills/   # operate an existing tenant
+cp -r skills/dlake-onboarding  ~/.claude/skills/   # set up a new integration
 ```
 
 Confirm your harness's exact path against its own docs — skill-loading conventions still vary between
