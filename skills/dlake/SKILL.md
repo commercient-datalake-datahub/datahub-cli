@@ -153,8 +153,11 @@ Never ship a `dlk_` key to a browser. Put it in a tiny server-side proxy that ad
 and forwards to DAB. Two auth options (full endpoint shapes in the **Data API (DAB) — HTTP contract**
 section below):
 
-- **Simplest:** send the raw key as `X-API-Key: dlk_...` to the auth-proxy path; it exchanges for you.
+- **Simplest (and what `dlake` itself does):** send the key as `X-API-Key: <tenant>:dlk_...` to the
+  auth-proxy path; it exchanges for you, server-side. This is the only option that works from any
+  network — the proxy host is public, the Auth API host is not.
 - **Explicit:** `POST /api/auth/apikeys/exchange` → Bearer JWT, then `Authorization: Bearer <jwt>`.
+  Requires an allowlisted network.
 
 Both also send `X-MS-API-ROLE`: `datalake_user` for an unscoped key, `key_<apiKeyId>` for a scoped one
 (the id is in the `create_api_key` response and the JWT `roles` claim). The auth-proxy infers the role
@@ -205,7 +208,9 @@ X-API-Key: dlk_...
 X-MS-API-ROLE: key_<apiKeyId>      # scoped keys; unscoped keys use datalake_user
 ```
 
-**B. Explicit exchange** (when you want to manage the ~60-min JWT yourself):
+**B. Explicit exchange** (when you want to manage the ~60-min JWT yourself). Note the Auth
+API host below is **not publicly fronted** — callers outside an allowlisted network get a
+bot-verification page instead of a response, so prefer **A** unless you are on-network:
 
 ```bash
 curl -X POST https://datalake-ms-auth-api.commercient.com/api/auth/apikeys/exchange \
