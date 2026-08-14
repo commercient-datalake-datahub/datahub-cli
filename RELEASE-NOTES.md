@@ -1,5 +1,21 @@
 # dlake release notes
 
+## 0.5.8 (2026-08-14)
+
+- **Fixed: `dlake status` reported every host as blocked when the platform was
+  fine.** The health check was acquiring an API token before probing, so if one
+  service was unreachable the check failed for *all* of them — including hosts whose
+  commands worked seconds later. Health checks now send no credential, and each host
+  is judged on its own.
+- Corrected in the bundled setup skill: creating a key is
+  `create_api_key --keyName <name> --expirationDays <7|30|90|180>` (both required),
+  and connecting an OAuth CRM needs `--redirectUri http://127.0.0.1:8801/callback/`
+  — without it you get `missing_redirect_uri`, which is a step earlier than the
+  provider-side `provider_app_not_configured`. The skill now lists all three codes
+  and says which are yours to fix.
+- Also clarified: you do **not** need to pick a different CRM to finish the CRM
+  step. Select it, run `crm_finalize`, and complete the authorization later.
+
 ## 0.5.7 (2026-08-14)
 
 **Please read the first item — it changes how you run every command.**
