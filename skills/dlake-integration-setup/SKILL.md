@@ -98,7 +98,7 @@ dlake admin registration_state                                  # where am I?
 dlake admin registration_capture_server_ip --ipAddress <ip>
 ```
 
-`registration_state` is the authoritative answer to "where did we get to" and the right first call
+`registration_state` is the authoritative answer to where a registration got to, and the right first call
 whenever you resume. Step 3 is a **prerequisite for the CRM step** — attempt step 4 first and the
 server answers `"Please complete step 3 first. [registration status 409]"`. That 409 is the wizard
 telling you the order; satisfy it rather than working around it.
