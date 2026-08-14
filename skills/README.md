@@ -11,10 +11,13 @@ and error" into "already knows the happy path."
 |-------|----------------|
 | [`dlake/`](dlake/SKILL.md) | Build and operate a tenant end-to-end: schema → expose → restart → scoped key, the sharp edges (the scoped-key restart, exposed-vs-raw entities, IDENTITY-key limits), and the REST/GraphQL + events contract — all in one [`SKILL.md`](dlake/SKILL.md). |
 | [`dlake-integration-setup/`](dlake-integration-setup/SKILL.md) | Stand up a NEW integration: register a tenant, seed it, then drive the setup wizard — server IP, CRM (connect now or later, OAuth included), and the ERP connector that declares Syspro/QuickBooks/SQL Server/ODBC. Covers the wizard's ordering and guards, credential lifetimes, and how to resume days later. |
-| [`dlake-txdownloaderpro-setup/`](dlake-txdownloaderpro-setup/SKILL.md) | Set up the **TxDownloaderPro writeback leg** — the CRM→source direction of an integration. Expose the gateway sync-state objects (`TxDownloaderPro`, `TxDownloaderProTrans`, `TxDownloaderProBlockDuplicateId`, `TimeStampRepository`, `TimeStampRepositoryHistory`) to the Data API, scope an API key to them, and apply it with one deliberate DAB restart. Covers exposure-vs-key-scope, `keyFields`, and the `SFUpdated` state-machine warning. |
+| [`dlake-txdownloaderpro/`](dlake-txdownloaderpro/SKILL.md) | Set up **and operate TxDownloaderPro** — the CRM→source (writeback) sync agent. Expose its gateway objects to the Data API and scope a key to them, then CRUD the configuration and in-flight transaction rows, edit the field mapping in their JSON/XML columns, and use the filter-operator vocabulary that decides which retrieved CRM records reach the source. Covers exposure-vs-key-scope, `keyFields`, and the `SFUpdated` state machine. |
+| [`dlake-crmpro/`](dlake-crmpro/SKILL.md) | Set up **and operate CRMPro** — the source→CRM (forward) sync agent that pushes ERP data into the supported CRM and e-commerce platforms. Flag-driven: CRUD the configuration and run-history/error tables, read and edit the field mapping, and know which of its tables are reachable as lake views and which deliberately are not. |
 
-Use `dlake/` for a tenant you already have; use `dlake-integration-setup/` for one you are
-creating; use `dlake-txdownloaderpro-setup/` when that integration needs writeback.
+Use `dlake/` for a tenant you already have and `dlake-integration-setup/` for one you are
+creating. The last two are the pair of **sync agents**: `dlake-crmpro/` moves data source→CRM,
+`dlake-txdownloaderpro/` moves it CRM→source. Most integrations run CRMPro; add
+TxDownloaderPro when changes made in the CRM must travel back.
 
 ## Install
 
@@ -28,10 +31,11 @@ A skill is just a folder. Copy it into the directory your harness scans for skil
 | **Other harnesses** | wherever the harness discovers skills — keep the `<skill>/SKILL.md` layout intact |
 
 ```bash
-# from a clone of this repo — install either or both
-cp -r skills/dlake             ~/.claude/skills/   # operate an existing tenant
-cp -r skills/dlake-integration-setup  ~/.claude/skills/   # set up a new integration
-cp -r skills/dlake-txdownloaderpro-setup ~/.claude/skills/   # add the writeback leg
+# from a clone of this repo — install any or all
+cp -r skills/dlake                   ~/.claude/skills/   # operate an existing tenant
+cp -r skills/dlake-integration-setup ~/.claude/skills/   # set up a new integration
+cp -r skills/dlake-crmpro            ~/.claude/skills/   # the source→CRM sync agent
+cp -r skills/dlake-txdownloaderpro   ~/.claude/skills/   # the CRM→source sync agent
 ```
 
 Confirm your harness's exact path against its own docs — skill-loading conventions still vary between
