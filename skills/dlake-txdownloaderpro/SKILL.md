@@ -57,10 +57,8 @@ receive data. You need this skill when the customer wants changes made in the CR
 to their source system — order entry from the CRM, status updates, record creation that must land
 in the ERP.
 
-**Write the name in full.** TxDownloaderPro is its own product — not an edition or a nickname of
-TxDownloader, which is a different thing entirely. Shortening it in a ticket, a commit message or a
-prompt points at the wrong product, and the tenant tables here are the only place the two look
-alike.
+**Write the name in full.** TxDownloaderPro is a distinct product from TxDownloader; the shortened
+form names something else.
 
 TxDownloaderPro is a scheduled service that runs against the customer's gateway database. It
 keeps its working state in a small family of tables in that database's `dbo` schema:
@@ -79,8 +77,8 @@ is key/value rows in a `CommercientFlags` table. Both live in `dbo` as well.
 TxDownloaderPro itself reaches these tables over a **direct database connection**, not over the
 Data API. Exposing them is what makes them reachable to *everything else* — the CLI, MCP tools,
 the SQL Editor's by-key paths, dashboards, and any app you build that needs to see or steer
-writeback state. Do not describe exposure as a precondition for the service to run; it is a
-precondition for **you** to operate it through the Data Lake.
+writeback state. Exposure is what lets you operate writeback through the Data Lake; the service
+itself does not depend on it.
 
 ## 2. What you actually expose
 
@@ -387,9 +385,9 @@ effect on the **next run** — no restart of anything, no redeploy.
 | `ResultStructure` | JSON. The four-part mapping used when pushing the source system's response back to the CRM | **Yes** — field mapping (section 11) |
 | `IsDoNotUpdateFieldsInSF` | Steers the hold/immediate-advance behaviour of the state machine | **Yes, and it is load-bearing** — see section 10 |
 | `FieldSynchronize` | Text. Written by the service; on at least one download path it is also read as a filter input (a created-date window, defaulting to the last hour, for one CRM's email objects) | **Yes on that path.** Treat as service-owned elsewhere |
-| `IsTrackingFieldsCreated` | Records that the tracking fields have been created on the CRM side | Effect of clearing it: **not established** — leave alone |
-| `IsStreaming` | Selects a streaming variant of the fetch path | **Not established** — leave alone |
-| `TxDownloaderDllName`, `IsDownloadDll`, `AdditionalFile` | A plug-in/download mechanism | **Not established** — leave alone |
+| `IsTrackingFieldsCreated` | Records that the tracking fields have been created on the CRM side | Service-owned. Do not modify |
+| `IsStreaming` | Selects a streaming variant of the fetch path | Service-owned. Do not modify |
+| `TxDownloaderDllName`, `IsDownloadDll`, `AdditionalFile` | A plug-in/download mechanism | Service-owned. Do not modify |
 | `DownloadError`, `IsLogEnable` | Diagnostics | Read them; do not rely on undocumented effects |
 
 Read the configuration:
@@ -489,7 +487,7 @@ diagnose "the order never arrived" — and where you can do real damage.
 | `0` | Imported from the CRM, not yet acknowledged back to the CRM. This is the value every new row is written with |
 | `1` | Acknowledged; ready to push to the CRM |
 | `2` | Synced to the CRM. Terminal for the push |
-| `3` | A suppression sentinel. The import path refuses to insert a new row for a `UniqueID` that already has a row at `3`. **Nothing in the writeback service writes `3`** — who sets it is not established here, so treat a `3` as somebody else's deliberate block and find out why before clearing it |
+| `3` | A suppression sentinel. The import path refuses to insert a new row for a `UniqueID` that already has a row at `3`. **Nothing in the writeback service writes `3`** — it is set elsewhere, so treat a `3` as a deliberate block and establish why before clearing it |
 | `4` | On hold — the row was pulled aside during the push and is waiting for the retry step |
 
 The transitions the service makes, in the order it makes them: `0 → 1` (acknowledge back to the
@@ -619,7 +617,7 @@ A mapping value is a string containing one or more `{{Path.To.Field}}` placehold
   not error, and it does not leave the placeholder in place.
 - Text around the placeholder is preserved, so `REF-{{DemoOrder.Demo_Ref__c}}` is a valid value.
 
-**That silent empty string is the number one field-mapping bug.** A mistyped path and a genuinely
+**That silent empty string is the most common field-mapping mistake.** A mistyped path and a genuinely
 blank CRM field produce byte-identical output. Verify a path by reading the actual `XMLResult` of
 a real transaction row, not by reading the CRM's field list.
 
