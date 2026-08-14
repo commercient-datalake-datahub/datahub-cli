@@ -86,7 +86,7 @@ The bootstrap key expires in **7 days**. If setup will span longer — waiting o
 common — create a durable key while the bootstrap one is still valid:
 
 ```bash
-dlake admin create_api_key --name "<tenant>-setup"
+dlake admin create_api_key --keyName "<tenant>-setup" --expirationDays 90
 ```
 
 Leaving this until after expiry creates a chicken-and-egg: minting a key requires a key.
@@ -145,8 +145,12 @@ To connect at any point, including long after step 4 is finalized:
 # 1. Where does this CRM's handshake stand? (none / pending / awaiting PIN / connected)
 dlake admin registration_crm_oauth_status --crmName <Crm>
 
-# 2. Begin — returns the authorization URL for the customer to open in a browser
-dlake admin registration_crm_oauth_start --crmName <Crm>
+# 2. Begin — returns the authorization URL for the customer to open in a browser.
+#    --redirectUri is REQUIRED for any CRM whose callback comes back to the machine
+#    running the wizard (the catalog shows callbackMode other than "website").
+#    Only ports registered with the providers are accepted: 8801, 8802, 8803.
+dlake admin registration_crm_oauth_start --crmName <Crm> \
+    --redirectUri http://127.0.0.1:8801/callback/
 
 # 3a. Finish with what the provider hands back
 dlake admin registration_crm_oauth_complete --crmName <Crm> --code <code> --state <state>
@@ -159,11 +163,22 @@ dlake admin registration_crm_oauth_confirm_pin --crmName <Crm> --pin <pin>
 deferred connection has since been completed. Which of `oauth_complete` / `oauth_confirm_pin` applies
 is visible in the CRM's `stages` in the catalog — a `pin` stage means the flow ends with a PIN.
 
-Some OAuth providers require the platform's redirect URI to be registered on their side before the
-handshake can complete. If `oauth_start` reports a problem with the redirect URI, that is a
-platform-side app registration matter rather than anything wrong with the tenant or the run: report
-it, continue with the rest of the setup, and complete the authorization afterwards using the same
-commands. Nothing about the integration is lost by finishing that part later.
+**Two different refusals, in this order.** Read the code, not the prose:
+
+| Code | Status | Meaning |
+|---|---|---|
+| `missing_redirect_uri` | 400 | You sent no callback URL. Supply `--redirectUri` as above. |
+| `invalid_redirect_uri` | 400 | The URL you sent is not an http loopback address. |
+| `provider_app_not_configured` | 424 | The platform holds no OAuth app credentials for this provider. Nothing you can fix from here. |
+
+The first two are yours to correct; the third is platform-side. You reach it only *after* supplying a
+valid redirect URI, so a run that stops at `missing_redirect_uri` has not yet learned anything about
+the provider's configuration.
+
+On `provider_app_not_configured`: report it, carry on with the rest of the setup, and complete the
+authorization later with the same commands. Nothing about the integration is lost by finishing that
+part afterwards — and you do **not** need to substitute a different CRM to close step 4. Selecting the
+CRM and running `crm_finalize` completes the step with the handshake still at `status: none`.
 
 ## 7. Wizard step 5 — declare the ERP connector
 
