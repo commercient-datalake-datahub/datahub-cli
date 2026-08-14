@@ -1,5 +1,36 @@
 # dlake release notes
 
+## 0.5.7 (2026-08-14)
+
+**Please read the first item — it changes how you run every command.**
+
+- **You now name the tenant on every command: `--profile <name>`.** There is no
+  default profile any more, and `dlake profiles use` is gone. Set `DLAKE_PROFILE`
+  once if you'd rather not repeat the flag in a shell session.
+  Why: previously a command could run against a tenant you hadn't named. Register a
+  new tenant on a machine that already had one, and the very next command — the one
+  the CLI itself printed — went to the *old* tenant, with nothing on screen to say
+  so. If you look after several customers, that is the wrong customer.
+- **The skills ship inside the CLI.** `dlake skills list`, `dlake skills install`,
+  `dlake skills show <name>`. Four guides: using the Data Lake, setting up a new
+  integration, and operating each of the two sync agents. No download, no internet.
+- **`--help` works when your key doesn't.** Tool help is served from a local cache
+  when the live call fails, clearly marked as cached. Documentation shouldn't need
+  the credential you're trying to fix.
+- **After registering, the key check is trustworthy.** It retries before saying
+  anything, and if it still can't confirm, it tells you the key is saved and the
+  registration complete — the *check* is what's inconclusive.
+- **Fewer misleading messages.** A blocked network no longer suggests you raise a
+  firewall ticket when the cause may be an endpoint we pointed you at. Wizard output
+  no longer shows a CRM you never chose, or a "not seeded" flag for a lake that is.
+- Old profiles pointing at a download host that only answers on certain networks are
+  moved to the public one automatically.
+- `dlake profile` works as well as `dlake profiles`.
+- `npm install -g` now shows progress instead of sitting silent for minutes.
+
+Still needs an allowlisted network: `query`, `export`, `views`, `s3`, `keys`,
+`projects`. `dlake` tells you when that's what you're hitting.
+
 ## 0.5.6 (2026-08-13)
 
 - **Fixed: `dlake admin` and `dlake tool` now work from any network.** They used
