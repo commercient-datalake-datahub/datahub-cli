@@ -30,10 +30,9 @@ table in the database rather than from static configuration files. That is the s
 fact for an operator: you change what a run does by changing **rows**, not files — which is exactly
 why this is a `dlake` skill.
 
-> **Naming caveat, worth having up front.** The product's README and contributor notes call the flag
-> table `Commercient_Flag`. The table the agent actually reads is **`CommercientFlags`** — the
-> singular form appears only inside method names. Trust `CommercientFlags`, and confirm against the
-> tenant before acting.
+> **Flag table name, worth having up front.** The flag table is **`CommercientFlags`**. You will also
+> see the singular `Commercient_Flag` in places; that form appears only inside method names, never as
+> a table. Use `CommercientFlags`, and confirm against the tenant before acting.
 
 ---
 
@@ -69,7 +68,7 @@ The CRMPro objects in that allowlist:
 | `CRMPRO_ERROR_LOG` | transaction / state |
 | `CRMPRO_DeleteRecordInfo` | transaction / state |
 | `CRMBackupObjectList` | transaction / state |
-| `CRM_Prompt_History` | present in the allowlist; purpose **unverified** — inspect before use |
+| `CRM_Prompt_History` | present in the lake view set; inspect before use |
 | `TimeStampRepository`, `TimeStampRepositoryHistory` | transaction / state (shared with TxDownloaderPro) |
 | `GenericAPISyncConfiguration`, `GenericAPIAuthenticationTemplateLink` | setup (Connection Manager siblings) |
 
@@ -81,7 +80,7 @@ the database at seed time, so a tenant missing one simply has no view for it.
 - **`CommercientFlags`** — the flag table. No working-schema view is created for it.
 - **`CRM_Parameters`** — the generic-REST mapping table. Same.
 - **`GenericAPIAuthonticationConfiguration`** — the Connection Manager **credential store**. Its
-  exclusion is a deliberate product decision, not an oversight: its JSON blobs are encrypted on save
+  exclusion is by design: its JSON blobs are encrypted on save
   by the writer, legacy rows may be plaintext, and a write through a view would bypass that
   encrypt-on-save path. **Do not add it back, and do not try to route around it.** Its non-credential
   siblings (`GenericAPISyncConfiguration`, `GenericAPIAuthenticationTemplateLink`) are included.
@@ -212,8 +211,8 @@ named connection: `APIAuthConfigID` (identity PK), `APIAuthConfigName`, `APIAuth
 `APIAuthConfigurationJSON_Backup`, `APIAuthResponseJSON`, `IsDeleted`, `LastModifiedDate`.
 `GenericAPIAuthenticationTemplateLink` links a connection to an auth template. A
 `CRM_Configuration` row points at a connection through `APIAuthConfigID`; when that is NULL — or
-points at a row that no longer exists — the agent falls back to `CRM_NAME` + the flag table, which
-the product documents as a zero-behaviour-change path for existing customers.
+points at a row that no longer exists — the agent falls back to `CRM_NAME` + the flag table, a
+zero-behaviour-change path for existing customers.
 
 ### 3b. Transaction / state — what an operator inspects
 
@@ -528,7 +527,7 @@ answered from the customer's sync server, not from here.
   interrupts the tenant's live Data API.
 - **Spelling is load-bearing.** `GenericAPIAuthonticationConfiguration` and `authonticationType`
   carry a long-standing typo; `GenericAPIAuthenticationTemplateLink` does not. The agent's flag table
-  is `CommercientFlags` even though the docs say `Commercient_Flag`. Copy names; do not correct them.
+  is `CommercientFlags`, not the singular form. Copy names; do not correct them.
 
 ## 8. Where this sits
 
