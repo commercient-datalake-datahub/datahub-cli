@@ -2,11 +2,15 @@
 name: dlake-crmpro
 description: >-
   Operate **CRMPro**, Commercient's forward sync agent, through the `dlake` CLI (npm
-  `@commercient/dlake`): read and change its setup tables (`CRM_Configuration`, `CRM_FieldList`,
-  the `CommercientFlags` flag table, `CRM_Parameters`, the Connection Manager records) and inspect
-  its per-run transaction tables (`TimeStampRepository`, `CRMProRunHistory`, `CRMPRO_DASHBOARD_ERROR`,
-  `CRMPRO_ERROR_LOG`, `CRMPRO_DeleteRecordInfo`, `CRMBackupObjectList`) when diagnosing a sync. Use
-  this skill whenever the task mentions CRMPro, the forward/ERP-to-CRM leg, a sync config row, a
+  `@commercient/dlake`) — remotely, with the `crmpro_*` admin tools (`dlake admin crmpro_list_processes`,
+  `crmpro_get_process`, `crmpro_update_process`, `crmpro_set_sync_enabled`, `crmpro_field_mapping`,
+  `crmpro_sync_history`, `crmpro_errors`, `crmpro_flags`, `crmpro_templates` and the rest): list and
+  edit sync processes, enable or disable sync, map fields, apply templates and diagnose a run from
+  anywhere. It also covers the underlying tables when a tool does not reach them — `CRM_Configuration`,
+  `CRM_FieldList`, the `CommercientFlags` flag table, `CRM_Parameters`, the Connection Manager records,
+  and the per-run tables `TimeStampRepository`, `CRMProRunHistory`, `CRMPRO_DASHBOARD_ERROR`,
+  `CRMPRO_ERROR_LOG`, `CRMPRO_DeleteRecordInfo`, `CRMBackupObjectList`. Use this skill whenever the task
+  mentions CRMPro, a `crmpro_` tool, the forward/ERP-to-CRM leg, a sync process or config row, a
   `Sync_Order` / `Sync_Operation_Type` / `TimeStamp_Prefix` value, a CRMPro flag, or field mapping
   through the JSON- and XML-bearing columns. For the writeback leg use `dlake-txdownloaderpro`;
   for standing an integration up use `dlake-integration-setup`; for general tenant operation use `dlake`.
@@ -27,8 +31,9 @@ thing, and their tables sit side by side in the same database.
 
 **CRMPro is flag-driven.** Its own docs state plainly that runtime behaviour comes from the flag
 table in the database rather than from static configuration files. That is the single most important
-fact for an operator: you change what a run does by changing **rows**, not files — which is exactly
-why this is a `dlake` skill.
+fact for an operator: you change what a run does by changing **state in the database**, not files —
+which is exactly why this is a `dlake` skill. You reach that state with the `crmpro_*` tools in §2,
+and directly with the CLI's data plane for the rest.
 
 > **Flag table name, worth having up front.** The flag table is **`CommercientFlags`**. You will also
 > see the singular `Commercient_Flag` in places; that form appears only inside method names, never as
@@ -41,12 +46,122 @@ why this is a `dlake` skill.
 - A destination object is not syncing, or is syncing the wrong rows → a `CRM_Configuration` row.
 - A field is missing or landing in the wrong destination field → `CRM_FieldList`, or a mapping column.
 - Sync stopped entirely, or a test run "turned it off" → a flag in `CommercientFlags`.
-- "Did it run? What broke?" → the transaction/state tables in section 3.
+- "Did it run? What broke?" → the transaction/state tables in section 4, or `crmpro_errors`.
 
-You do **not** install, schedule or upgrade the agent from here. This skill is the **data** surface:
-what an operator reads and changes about a running CRMPro, through the tenant's Data Lake.
+You do **not** install, schedule or upgrade the agent from here. This skill is the **operating**
+surface: what an operator reads and changes about a running CRMPro. Reach for the `crmpro_*` tools in
+§2 first; drop to the tables in §3–§4 for what those tools do not cover.
 
-## 2. Where these tables live, and how you reach them
+## 2. Operating CRMPro remotely — the `crmpro_*` tools
+
+The control plane carries a dedicated **`crmpro_*`** tool set, and it is the **preferred way to
+operate CRMPro**. These tools drive the product's own logic — the connection pair, the delete guard,
+the view that belongs to a process, the customer's activity trail — instead of writing rows behind
+it. Everything runs from anywhere, over the tenant's API key:
+
+```bash
+dlake admin <tool> --profile <tenant> [--arg value ...]
+```
+
+`--profile` is **always explicit**. There is deliberately no default profile — naming the tenant on
+every call is what stops a command landing on the wrong customer. `DLAKE_PROFILE` in the environment
+is the only shorthand.
+
+**Every `crmpro_*` tool is Admin-only.** The key you call with must belong to a tenant user who holds
+the **Admin** role; a key minted from a non-admin user is refused with a `403` naming that role. Keys
+inherit the roles of the user who minted them, so **mint operating keys from an Admin account** — a
+403 here is an account question, not a broken tool or a scope you can widen after the fact. The same
+rule governs the `registration_*` wizard tools.
+
+No `crmpro_*` tool takes a user id: the platform resolves the customer from the key. Each returns its
+outcome directly, so you read the result rather than inferring it from a follow-up call.
+
+### Quick reference
+
+**Reads — always safe.**
+
+| Tool | What it does | Key args |
+|---|---|---|
+| `crmpro_list_processes` | Every sync process — the grid an operator works from | `isActiveOnly` (default `false`) |
+| `crmpro_get_process` | One process in full: all 39 fields, including the stored connection id | `recordId` |
+| `crmpro_get_process_sql` | The `CREATE VIEW` script behind that process's view | `recordId` |
+| `crmpro_field_mapping` | The mapping grid — one row per view column, with the saved CRM field | `recordId` |
+| `crmpro_sync_status` | The master sync flag. Pure read, no side effect | — |
+| `crmpro_sync_history` | The per-record sync rows (key, saved timestamp, upsert time, destination id) | see `--help` |
+| `crmpro_sync_history_options` | The object picker that scopes a history query | — |
+| `crmpro_errors` | Sync errors for the customer | — |
+| `crmpro_agent_info` | The sync agent's own self-report | — |
+| `crmpro_flags` | The sync flags for this customer's ERP/CRM pair, with current values | — |
+| `crmpro_user_flags` | The customer's extra-info toggles | — |
+| `crmpro_connections` | Connection-manager entries and the ids every connection-aware call wants | — |
+| `crmpro_crm_objects` | Objects the live CRM offers | — |
+| `crmpro_crm_object_fields` | Fields of one CRM object, live | see `--help` |
+| `crmpro_tables_views` | Source tables (`false`) or source views (`true`) to build a process from | `isNeedtoCreateFromView` |
+| `crmpro_table_columns` | Columns of one table or view | `tableName` |
+| `crmpro_templates` | The default-template catalog | see `--help` |
+| `crmpro_selected_templates` | Which templates are currently enabled (where present) | — |
+
+**Mutations — these change what the next run does.**
+
+| Tool | What it does | Key args |
+|---|---|---|
+| `crmpro_set_sync_enabled` | Turn the customer's master sync on or off. **Idempotent**: it reads the current state, toggles only if the state differs, and reports before and after | `enabled` (bool) |
+| `crmpro_update_process_field` | Flip one field on one process — the everyday `Is_Active` style lever | `recordId`, `fieldName`, `checked` |
+| `crmpro_update_process` | Change a process. Send `recordId` plus only the fields you are changing; the merge happens server-side and omitted fields are preserved | `recordId` + the fields to change |
+| `crmpro_create_process` | Create a process (and, for a table-sourced one, its view) | see `--help` |
+| `crmpro_delete_process` | Delete a process and attempt to drop its view | `recordId`, `confirm` (must be `true`) |
+| `crmpro_apply_template` | Import default templates | see `--help` |
+
+### Worked examples
+
+```bash
+# What is this customer syncing, and is sync even on?
+dlake admin crmpro_list_processes --profile <tenant>
+dlake admin crmpro_list_processes --profile <tenant> --isActiveOnly true
+dlake admin crmpro_sync_status    --profile <tenant>
+
+# One process in full — this is where the stored connection id lives
+dlake admin crmpro_get_process --profile <tenant> --recordId 123
+
+# Stop one object syncing, without touching anything else
+dlake admin crmpro_update_process_field --profile <tenant> \
+    --recordId 123 --fieldName Is_Active --checked false
+
+# Master switch. Safe to run when it is already in the wanted state
+dlake admin crmpro_set_sync_enabled --profile <tenant> --enabled true
+
+# Remove a process. Refused without the confirmation
+dlake admin crmpro_delete_process --profile <tenant> --recordId 123 --confirm true
+```
+
+For `crmpro_update_process` and `crmpro_create_process`, take the exact field names from
+`dlake admin crmpro_update_process --help` (and from a `crmpro_get_process` read of the row you are
+about to change) rather than from memory.
+
+### What these tools know that a raw row write does not
+
+- **A process targets either a connection or the customer's registered CRM — never both.** Either it
+  points at a named connection-manager entry (its `apiAuthConfigID` is set, and that entry's name
+  decides which CRM it talks to), or that id is null and the process targets the CRM the customer
+  registered. On the wire the authoritative signal is **`apiAuthConfigID`**, not the CRM name: reads
+  apply a display fallback, so a row with no stored name still shows one. Get valid ids from
+  `crmpro_connections`. And although `crmpro_update_process` preserves what you omit, still send the
+  connection pair deliberately whenever changing the target is the point of the edit.
+- **Live CRM providers are Salesforce, HubSpot and ZohoCRM**, each with automatic token refresh.
+  DynamicCRM is recognised but answers `crm_not_supported` — that is the platform telling you it
+  cannot talk to that CRM, not a misconfigured tenant.
+- **The delete-records flag has a prerequisite.** Turning `Is_Active_Delete_Records` on is refused
+  until the process has a non-empty `Delete_SQL_Query`. Non-empty is not the same as valid: a source
+  table without a primary key produces a malformed delete query that the guard cannot catch, so read
+  the query before you enable the flag.
+- **The master sync toggle is customer-wide.** `crmpro_set_sync_enabled` affects every process in the
+  tenant. To stop one object, use `crmpro_update_process_field` on that process instead.
+
+## 3. Where these tables live, and how you reach them
+
+Everything from here down is the **fallback path** — the direct-table surface for what the tools in
+§2 do not reach: the flag and parameter tables, the cursor tables, and the XML-bearing mapping
+columns in §6.
 
 CRMPro's tables are ordinary tables in the **`dbo`** schema of the customer's gateway database —
 outside the tenant's working (platform) schema, which is usually `DLO` but not always. The agent
@@ -127,7 +242,7 @@ tenant's live Data API** — batch every exposure change first, restart once, an
 customer is ready rather than as a reflex. Trust the `served` field over mere presence: a listed but
 `served:false` entity answers `EntityNotFound`, which is a missing restart, not a broken entity.
 
-## 3. The tables
+## 4. The tables
 
 ### 3a. Setup — what an operator changes
 
@@ -143,7 +258,7 @@ is what drives that object's behaviour. Columns (as the agent creates them):
 | `Sync_Order` | Integer execution order. Rows are processed in ascending `Sync_Order` |
 | `CRM_Object_Display_Name` | Human label used throughout the logs |
 | `SQL_Query` | The source query/view the rows come from |
-| `CRM_Object_API_Name` | Destination object/endpoint name. May carry `{placeholder}` tokens (see §5) |
+| `CRM_Object_API_Name` | Destination object/endpoint name. May carry `{placeholder}` tokens (see §6) |
 | `CRM_PK_API_Name` | The destination-side key field |
 | `Prefix_OF_Field_OR_Object`, `Postfix_OF_Field_OR_Object` | Prefix/suffix applied to field or object names |
 | `TimeStamp_Prefix` | **Load-bearing.** The prefix that namespaces this object's rows in `TimeStampRepository` |
@@ -202,7 +317,7 @@ retention intervals). Enumerate the live table rather than working from this lis
 documented subset, not the whole surface. **Flags are tenant-global**: one flag row changes behaviour
 for every config row in that database.
 
-**`CRM_Parameters`** drives the generic REST path — see §5. Columns: `ID`,
+**`CRM_Parameters`** drives the generic REST path — see §6. Columns: `ID`,
 `CRM_Configuration_ID` (→ `CRM_Configuration.ID`), `GroupName`, `Key`, `Value`,
 `IsDefaultForAllRequest`, `IsActive`.
 
@@ -230,7 +345,13 @@ The agent also writes local log files on the customer's sync server (a rotating 
 log, a run summary, and a binary last-run-timestamp file). Those are **not** in the database and not
 reachable from `dlake` — ask for them if the database tables do not explain a failure.
 
-## 4. CRUD through the CLI
+## 5. Direct table CRUD — the fallback path
+
+Use this **when a `crmpro_*` tool does not cover what you need**: the flag and parameter tables, the
+cursor tables, `CRM_FieldList` rows you want to edit relationally, and anything you are reading
+purely to diagnose. For listing, reading, creating, changing and deleting a **process**, for the
+**master sync flag**, and for the **mapping grid**, prefer §2 — those tools carry guards and a
+connection-pair discipline that a row write does not.
 
 Argument names below are exact. Getting one wrong is worse than not acting: confirm against
 `dlake tool <tool> --help` / `dlake admin <tool> --help` on the tenant in front of you before a
@@ -312,23 +433,27 @@ because they wrap a single table, and they behave like the base table in this re
 | Any read of any of these objects | **Safe.** |
 | Editing `Developer_Comment` | **Safe.** Free text, no behaviour |
 | Editing `CRM_FieldList` rows | **Changes the next run** — the intended, ordinary field-mapping edit |
-| Toggling `Is_Active` / `Is_Active_Get_Records` / `Is_Active_Delete_Records` | **Changes the next run.** The everyday lever. But see the flag caveats in §7 — a few destination modules have been found not to honour these |
+| Toggling `Is_Active` / `Is_Active_Get_Records` / `Is_Active_Delete_Records` | **Changes the next run.** The everyday lever — but do it with `crmpro_update_process_field`, which carries the delete-query guard. Also see the flag caveats in §8: a few destination modules have been found not to honour these |
 | Changing `Sync_Order`, `Sync_Batch_Size`, `Delete_Records_Limit` | **Changes the next run.** Reversible, low blast radius |
 | Changing `Sync_Operation_Type` | **Changes the next run**, and changes *semantics* — upsert vs create vs update vs skip |
 | Changing `TimeStamp_Prefix` | **Dangerous.** It namespaces this object's rows in `TimeStampRepository`. Change it and the object's entire cursor history is orphaned; the next run behaves like a first run for every record |
 | Editing `TimeStampRepository` rows | **Dangerous.** This is the change-detection cursor. Deleting a row re-sends that record; editing `SavedTimeStamp` by hand silently mis-scopes what the next run picks up |
-| Changing a flag row | **Tenant-global.** One row changes behaviour for every config row in the database. See §7 |
-| Deleting a `CRM_Configuration` row | **Destructive.** Prefer `Is_Active = false`, which is reversible and leaves the cursor history intact |
+| Changing a flag row | **Tenant-global.** One row changes behaviour for every config row in the database. See §8 |
+| Deleting a `CRM_Configuration` row | **Destructive**, and it leaves the process's view behind. Prefer `Is_Active = false`, which is reversible and leaves the cursor history intact; when the process really must go, use `crmpro_delete_process --confirm true`, which also attempts the view drop |
 | Anything in `GenericAPIAuthonticationConfiguration` | **Out of bounds from here.** Not view-wrapped, deliberately. Use the Admin Portal's Connection Manager |
 
-## 5. Field mapping — the JSON- and XML-bearing columns
+## 6. Field mapping — the JSON- and XML-bearing columns
 
 Three mapping surfaces, in ascending order of how careful you need to be.
 
 ### Relational: `CRM_FieldList`
 
 The plainest one, and the one you will use most: `View_Field_Name` → `CRM_API_Name`, per
-`Object_Name`. Ordinary rows, ordinary CRUD, per §4.
+`Object_Name`. Read the mapping a process actually resolves with
+`dlake admin crmpro_field_mapping --profile <tenant> --recordId <id>` — one row per view column, with
+the saved CRM field alongside it, which is the view an operator wants before changing anything. Where
+you then need row-level edits the tools do not offer, these are ordinary rows with ordinary CRUD,
+per §5.
 
 ### Placeholder tokens + `CRM_Parameters` (generic REST destinations)
 
@@ -351,7 +476,7 @@ values across the whole batch, comma-joined. If a token names a column the view 
 agent logs that the view does not contain it and **skips the object for that run**. So a mapping
 break here shows up as a silently skipped object, not an error from the destination.
 
-`CRM_Parameters` is **not** in the seeded view allowlist (§2). Check `list_views` before planning to
+`CRM_Parameters` is **not** in the seeded view allowlist (§3). Check `list_views` before planning to
 edit it through the Data API.
 
 ### XML-bearing columns
@@ -449,18 +574,22 @@ over the copy embedded in the configuration because it is the fresher one. Both 
 either camelCase or snake_case token keys.
 
 **You do not edit these through the Data Lake.** The credential table is excluded from the view
-sweep on purpose (§2), and the JSON is credential-bearing. Change connections in the Admin Portal's
+sweep on purpose (§3), and the JSON is credential-bearing. Change connections in the Admin Portal's
 Connection Manager, which owns the encrypt-on-save path. What you *may* usefully do from here is
 observe the **link**: read `CRM_Configuration.APIAuthConfigID` to see which connection a config row
 resolves through, and whether it is NULL (flag fallback) or set.
 
-## 6. Verifying a change, and what a run does next
+## 7. Verifying a change, and what a run does next
 
-**Verify the write itself.** Read the row back — the same tool, the same key:
+**Verify the write itself.** Read the record back:
 
 ```bash
-dlake tool read_records --entity CRM_Configuration --filter "ID eq 12" --first 1
+dlake admin crmpro_get_process --profile <tenant> --recordId 12          # after a crmpro_* write
+dlake tool  read_records --entity CRM_Configuration --filter "ID eq 12" --first 1   # after a row write
 ```
+
+Read-back matters most after `crmpro_update_process_field`: an unrecognised `fieldName` reports
+success and changes nothing, and the record is the only place that shows it.
 
 **Nothing takes effect until the next scheduled run.** CRMPro is a scheduled per-customer agent; it
 reads its configuration and flags at **startup**. An edit made mid-run does not affect the run in
@@ -475,6 +604,9 @@ connection, rather than batching rows by platform.
 
 **Where to look after the run:**
 
+Start with `crmpro_errors` and `crmpro_sync_history` — the fastest read of what broke and what moved.
+Then, for the detail those do not carry:
+
 1. `CRMProRunHistory` — a row with `RunDateTime` proves the agent ran.
 2. `CRMPRO_DASHBOARD_ERROR` — errors from the **latest** run only (truncated each run per the README).
 3. `CRMPRO_ERROR_LOG` — persistent errors; filter by `RunID` to isolate one run.
@@ -485,8 +617,33 @@ connection, rather than batching rows by platform.
 If none of those moved, the question is whether the agent ran at all — a scheduling/host question,
 answered from the customer's sync server, not from here.
 
-## 7. Things that bite
+## 8. Things that bite
 
+- **The `crmpro_*` tools are Admin-only.** The calling key must belong to a tenant user holding the
+  **Admin** role; anything else gets a `403` naming that role. Keys inherit the user's roles, so the
+  fix is a key minted from an Admin account — not a scope change, not a retry. Same for the
+  `registration_*` wizard tools.
+- **`--profile` is never optional.** There is no default profile. Omit it and the command does not
+  quietly pick a tenant for you; `DLAKE_PROFILE` is the only shorthand.
+- **An unknown `fieldName` on `crmpro_update_process_field` reports success and changes nothing.**
+  Only whitelisted columns are writable through it. Spell the field exactly as the record does, and
+  read the record back with `crmpro_get_process` when it matters.
+- **`crmpro_delete_process` requires `--confirm true`.** Without it the call is refused. With it the
+  process is gone — prefer switching `Is_Active` off first, and reserve deletion for a process that
+  should not exist.
+- **A process targets a connection OR the registered CRM, never both.** `apiAuthConfigID` set means
+  the connection-manager entry decides the CRM; null means the customer's registered CRM. Reads apply
+  a display fallback, so the CRM name on the wire is not proof of anything — trust `apiAuthConfigID`,
+  and take valid ids from `crmpro_connections`. `crmpro_update_process` preserves fields you omit, but
+  send the connection pair deliberately when retargeting is the point of the edit.
+- **`Is_Active_Delete_Records` needs a `Delete_SQL_Query` first**, and the guard only checks that the
+  query is non-empty. A source table with no primary key yields a malformed delete the guard cannot
+  catch — read the query yourself before enabling the flag.
+- **The master sync toggle is customer-wide.** `crmpro_set_sync_enabled` is idempotent and reports the
+  state before and after, but it moves the whole customer. One object belongs in
+  `crmpro_update_process_field`.
+- **DynamicCRM answers `crm_not_supported`.** Salesforce, HubSpot and ZohoCRM are the live providers,
+  each refreshing its own tokens. That refusal is the platform being clear, not a tenant fault.
 - **`TimeStamp_Prefix` is the cursor namespace.** `TimeStampRepository.Key` is built as
   `TimeStamp_Prefix` + the record's source key. Rename the prefix and every existing cursor row for
   that object is orphaned in place — no error, and the next run re-sends the whole object. Treat this
@@ -517,7 +674,7 @@ answered from the customer's sync server, not from here.
   `Is_Active_Get_Records` either) — reported as **Trello**, **Asana** and **Shopify**. If setting
   `Is_Active = false` does not stop a sync, this is the first thing to check, not a Data Lake
   problem. Treat that report as a point-in-time finding and re-verify against the tenant's build.
-- **`DeleteRecordXML` is not XML.** See §5.
+- **`DeleteRecordXML` is not XML.** See §6.
 - **The credential JSON is off-limits from here.** No view is created for the Connection Manager
   credential table, by decision, because a write through a view would bypass encryption on save.
 - **`CommercientFlags` and `CRM_Parameters` have no seeded view either.** Do not plan an edit through
@@ -529,12 +686,12 @@ answered from the customer's sync server, not from here.
   carry a long-standing typo; `GenericAPIAuthenticationTemplateLink` does not. The agent's flag table
   is `CommercientFlags`, not the singular form. Copy names; do not correct them.
 
-## 8. Where this sits
+## 9. Where this sits
 
 | Skill | Covers |
 |---|---|
 | `dlake-integration-setup` | Standing an integration up: registration, verification, seeding, then the wizard — CRM choice and the ERP connector |
-| **`dlake-crmpro`** (this) | Operating the **forward** leg: CRMPro's setup and transaction tables, CRUD on them, and field mapping |
+| **`dlake-crmpro`** (this) | Operating the **forward** leg: the `crmpro_*` tools, and the setup and transaction tables behind them — processes, sync control, field mapping, diagnostics |
 | `dlake-txdownloaderpro` | The **writeback** leg: exposing the TxDownloaderPro objects and scoping a key to them |
 | `dlake` | Operating a tenant generally — schema, queries, exports, keys, the REST/GraphQL contract |
 
