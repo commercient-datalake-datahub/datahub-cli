@@ -27,9 +27,9 @@ register start → [human clicks email link] → seed + bootstrap key
     → step 5  declare ERP connector → provision
 ```
 
-Steps 3–5 are **admin-plane MCP tools** (`dlake admin registration_*`). They authenticate with the
-tenant's API key, work from any network, and are safe to re-run — the wizard state lives on the
-server, so you can stop and resume at any point.
+Steps 3–5 are **admin-plane tools** (`dlake admin registration_*`). They authenticate with the
+tenant's API key and are safe to re-run — the wizard state lives on the server, so you can stop and
+resume at any point.
 
 ---
 
@@ -44,7 +44,7 @@ printf '%s' "$PW" | dlake register start \
 what makes the platform seed a Data Lake and issue the bootstrap API key, and **every later step
 needs that key**. The customer's real ERP is declared at step 5 — that is the designed place for it,
 and it is what `--erpName` on the connector step is for. Passing an ERP at registration instead
-produces an account the seeder does not pick up, and the run stalls with nothing to act on.
+produces an account that never seeds a Data Lake, and setup stalls with nothing to act on.
 
 **Keep the password.** `dlake register login` needs that exact string to resume from another machine
 or after the local token expires. Generating one inline and piping it straight in leaves it
@@ -59,9 +59,8 @@ PW=$(openssl rand -base64 18)     # store $PW somewhere durable BEFORE the shell
 
 ## 2. The human clicks the verification link
 
-Nothing progresses until they do. The link is in the inbox you registered, opens a page hosted by
-the Registration API, needs no sign-in, and is safe to click twice. There is no CLI verify command
-by design.
+Nothing progresses until they do. The link is in the inbox you registered, opens a verification
+page, needs no sign-in, and is safe to click twice. There is no CLI verify command by design.
 
 ## 3. Wait for the seed, and catch the key
 
@@ -257,7 +256,7 @@ API key — so the two are independent and you rarely need both.
 | Tool | Step | Purpose |
 |---|---|---|
 | `registration_state` | any | Full wizard state — always the first call when resuming |
-| `registration_status` | any | Account/verification/progress from the Registration API |
+| `registration_status` | any | Account verification and provisioning progress |
 | `registration_capture_server_ip` | 3 | Record the customer's server IP |
 | `registration_crm_catalog` | 4 | CRMs, their auth modes and fields |
 | `registration_crm_select` | 4 | Choose the CRM |
