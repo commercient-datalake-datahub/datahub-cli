@@ -66,7 +66,7 @@ dlake admin create_api_key --keyName <app> --expirationDays 180 --scope @scope.j
 dlake admin restart_dab --confirm true                             # ← REQUIRED, see Rule 1
 ```
 
-## Rules (learned the hard way — each prevents a specific failure)
+## Rules (each prevents a specific failure)
 
 1. **After creating (or re-saving the scope of) a *scoped* API key, `restart_dab` again.** DAB's
    running config only gains the key's per-key role (`key_<id>`) on regeneration. Skip this and every
@@ -84,9 +84,8 @@ dlake admin restart_dab --confirm true                             # ← REQUIRE
 
 3. **The active schema (usually `DLO`, not always) can't be switched from the CLI** — only the web
    UI's schema dropdown switches it; there is deliberately no `set_active_schema` tool. All DDL and
-   `ingest_table` land in the active schema. Read it with `dlake tool get_active_schema` (REST:
-   `GET /api/ddl/dab/active-schema`); to keep multiple apps tidy in one schema, prefix object names
-   (e.g. `pizza_orders`).
+   `ingest_table` land in the active schema. Read it with `dlake tool get_active_schema`; to keep
+   multiple apps tidy in one schema, prefix object names (e.g. `pizza_orders`).
 
 4. **On Windows, pass array/object args as `@file.json`.** Inline quoted JSON gets mangled by the
    shell. This is the reliable path on every platform and works for **any** arg type; `@@` passes a
@@ -154,10 +153,8 @@ and forwards to DAB. Two auth options (full endpoint shapes in the **Data API (D
 section below):
 
 - **Simplest (and what `dlake` itself does):** send the key as `X-API-Key: <tenant>:dlk_...` to the
-  auth-proxy path; it exchanges for you, server-side. This is the only option that works from any
-  network — the proxy host is public, the Auth API host is not.
+  auth-proxy path; it exchanges for you, server-side. Prefer this.
 - **Explicit:** `POST /api/auth/apikeys/exchange` → Bearer JWT, then `Authorization: Bearer <jwt>`.
-  Requires an allowlisted network.
 
 Both also send `X-MS-API-ROLE`: `datalake_user` for an unscoped key, `key_<apiKeyId>` for a scoped one
 (the id is in the `create_api_key` response and the JWT `roles` claim). The auth-proxy infers the role
@@ -208,9 +205,8 @@ X-API-Key: dlk_...
 X-MS-API-ROLE: key_<apiKeyId>      # scoped keys; unscoped keys use datalake_user
 ```
 
-**B. Explicit exchange** (when you want to manage the ~60-min JWT yourself). Note the Auth
-API host below is **not publicly fronted** — callers outside an allowlisted network get a
-bot-verification page instead of a response, so prefer **A** unless you are on-network:
+**B. Explicit exchange** (when you want to manage the ~60-min JWT yourself). Prefer **A** unless you
+have a reason to hold the JWT; if this call reports a network restriction, contact support:
 
 ```bash
 curl -X POST https://datalake-ms-auth-api.commercient.com/api/auth/apikeys/exchange \
