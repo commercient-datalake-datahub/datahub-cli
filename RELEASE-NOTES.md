@@ -1,5 +1,36 @@
 # dlake release notes
 
+## 0.5.9 (2026-08-15)
+
+- **New: `dlake crmpro` — run CRMPro from the command line.** The everyday verbs
+  for the forward ERP→CRM sync, without opening the portal:
+
+  ```
+  dlake crmpro processes [--active]     the sync grid
+  dlake crmpro process <id>             one process in full
+  dlake crmpro status                   is the sync on or off
+  dlake crmpro enable | disable         turn it on or off
+  dlake crmpro history <id>             what was pushed, when, to which CRM record
+  dlake crmpro errors                   why records are missing in the CRM
+  dlake crmpro connections              the CRM connections a process can use
+  dlake crmpro mapping <id>             a process's field mapping
+  ```
+
+  `enable` and `disable` set the state you asked for — run either twice and
+  nothing moves — and each prints what the setting was before, what it is now,
+  and whether anything changed, so a no-op no longer looks like a success.
+- **Everything else CRMPro can do is available too.** Creating, editing and
+  deleting processes, importing templates, listing CRM objects and fields, the
+  sync flags, the sync agent's own version report — 24 operations in all — are
+  there as `dlake admin crmpro_<name>`, each with `--help` for its arguments.
+  `dlake admin list` names them.
+- **CRMPro commands need the Admin role.** The API key has to belong to a user
+  who holds Admin on the tenant. If it doesn't, the command says so plainly and
+  exits 3; nothing is changed.
+- The bundled CRMPro guide (`dlake skills show dlake-crmpro`) ships updated in
+  this version — read it before the editing commands: a few of them protect you
+  from behaviour that is not obvious from the arguments alone.
+
 ## 0.5.8 (2026-08-14)
 
 - **Fixed: `dlake status` reported every host as blocked when the platform was
