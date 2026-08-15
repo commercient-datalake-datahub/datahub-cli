@@ -165,8 +165,8 @@ dlake admin set_entity_exposure --entity TxDownloaderProTrans \
 `dlake admin describe_table` / `describe_entities` to find the right column rather than guessing;
 `TxDownloaderProTransId` above is an illustration of the shape, not a promise about your tenant.
 
-> MCP clients cache `tools/list` per session. If `keyFields` is missing from the schema your
-> client shows, reconnect — direct JSON-RPC callers can pass it immediately.
+> Some clients cache the tool list for the life of a session. If `keyFields` is missing from the
+> schema your client shows, reconnect.
 
 **Removal is destructive.** `--expose false` withdraws all API access to that entity and requires
 `--confirm true`.
@@ -495,7 +495,7 @@ CRM), `1 → 4` (put aside), `4 → 2` (retry succeeded), `1 → 2` (main push s
 load-bearing: holds are taken before retries, and retries before the main push, so the main push
 never touches a row that is still on hold.
 
-> **The standing warning, from the product's own contract notes:** these columns and their state
+> **The standing warning:** these columns and their state
 > values are load-bearing. Renaming a column breaks every handler. **Changing the meaning of an
 > `SFUpdated` value silently corrupts sync state** — there is no error, records simply move
 > wrongly. Exposing the entity through the Data API makes it writeable; that does not make
@@ -695,8 +695,7 @@ performs on the way in.
 
 These are the operators of the JSON filter clauses carried in the `Where` part of a `Query`
 (section 9). Each clause is an object; all clauses in the array must pass or the record is not
-imported. This set is established from the general clause evaluator applied to the retrieved
-record's XML.
+imported. They are evaluated against the retrieved record's XML.
 
 Clause shape:
 
@@ -869,10 +868,10 @@ time, so there is nothing to expose before then.
 
 - **Changing what an `SFUpdated` value means.** `TxDownloaderProTrans` is the sync state machine:
   its `SFUpdated` values (`0` / `1` / `2` / `4`) plus `IsERPCompleted` and
-  `IsDoNotUpdateFieldsInSF` are what every writeback handler steers on. The product's own contract
-  notes warn that these columns and state values are load-bearing, that renaming a column breaks
-  all handlers, and that **changing the meaning of an `SFUpdated` value silently corrupts sync
-  state** — no error, just wrong records moving. Exposing the entity through the Data API makes it
+  `IsDoNotUpdateFieldsInSF` are what every writeback handler steers on. These columns and state
+  values are load-bearing: renaming a column breaks all handlers, and **changing the meaning of an
+  `SFUpdated` value silently corrupts sync state** — no error, just wrong records moving. Exposing
+  the entity through the Data API makes it
   *writeable*. Read it freely; do not hand-edit state values, and do not "tidy" the columns.
 - **Conflating exposure with key scope.** Exposing an entity publishes it tenant-wide; scoping a
   key restricts *that key* to a subset. Both must line up. A key scoped to an unexposed entity
