@@ -19,25 +19,24 @@ description: >-
 # Operating CRMPro with `dlake`
 
 **CRMPro** is Commercient's **forward** sync engine. It reads a customer's ERP data out of their
-gateway database and pushes it into the CRM or e-commerce platform — the product's own README
-describes it as covering the whole lifecycle: schema creation in the destination, incremental change
-detection by timestamp, transformation, destination API calls, error logging and summary reporting.
-It runs **per customer on a schedule**, and its README lists **16+ supported destination platforms**
-(CRM and e-commerce alike).
+gateway database and pushes it into the CRM or e-commerce platform, covering the whole lifecycle:
+schema creation in the destination, incremental change detection by timestamp, transformation,
+destination API calls, error logging and summary reporting. It runs **per customer on a schedule**,
+and supports **16+ destination platforms** (CRM and e-commerce alike).
 
 Its counterpart is **TxDownloaderPro**, which runs the other way — CRM back toward the source. They
 are **different products**. Write both names in full, always; abbreviating either points at the wrong
 thing, and their tables sit side by side in the same database.
 
-**CRMPro is flag-driven.** Its own docs state plainly that runtime behaviour comes from the flag
-table in the database rather than from static configuration files. That is the single most important
-fact for an operator: you change what a run does by changing **state in the database**, not files —
+**CRMPro is flag-driven.** Runtime behaviour comes from the flag table in the database rather than
+from static configuration files. That is the single most important fact for an operator: you change
+what a run does by changing **state in the database**, not files —
 which is exactly why this is a `dlake` skill. You reach that state with the `crmpro_*` tools in §2,
 and directly with the CLI's data plane for the rest.
 
-> **Flag table name, worth having up front.** The flag table is **`CommercientFlags`**. You will also
-> see the singular `Commercient_Flag` in places; that form appears only inside method names, never as
-> a table. Use `CommercientFlags`, and confirm against the tenant before acting.
+> **Flag table name, worth having up front.** The flag table is **`CommercientFlags`** — the plural
+> form. The singular `Commercient_Flag` is never a table name. Use `CommercientFlags`, and confirm
+> against the tenant before acting.
 
 ---
 
@@ -195,9 +194,8 @@ the database at seed time, so a tenant missing one simply has no view for it.
 - **`CommercientFlags`** — the flag table. No working-schema view is created for it.
 - **`CRM_Parameters`** — the generic-REST mapping table. Same.
 - **`GenericAPIAuthonticationConfiguration`** — the Connection Manager **credential store**. Its
-  exclusion is by design: its JSON blobs are encrypted on save
-  by the writer, legacy rows may be plaintext, and a write through a view would bypass that
-  encrypt-on-save path. **Do not add it back, and do not try to route around it.** Its non-credential
+  exclusion is by design: its JSON blobs are encrypted on save, and a write through a view would
+  bypass that encrypt-on-save path. **Do not add it back, and do not try to route around it.** Its non-credential
   siblings (`GenericAPISyncConfiguration`, `GenericAPIAuthenticationTemplateLink`) are included.
 
 Note the spelling: the credential table's name contains the long-standing typo
@@ -296,10 +294,9 @@ design.
 to look when a field is landing in the wrong destination field.
 
 **`CommercientFlags`** — the flag table. Two columns matter: **`FlagName`** and **`Value`**, both
-read as strings; the agent reads the whole table at startup. Flags the product's own README
-documents:
+read as strings; the agent reads the whole table at startup. The documented flags:
 
-| Flag | Documented purpose | Documented default |
+| Flag | Purpose | Default |
 |---|---|---|
 | `CRM_NAME` | Target platform identifier (fallback dispatch) | detected from DB |
 | `FirstTimeSync` | Create database objects on this run, then **exit without syncing** | `True` |
@@ -326,8 +323,7 @@ named connection: `APIAuthConfigID` (identity PK), `APIAuthConfigName`, `APIAuth
 `APIAuthConfigurationJSON_Backup`, `APIAuthResponseJSON`, `IsDeleted`, `LastModifiedDate`.
 `GenericAPIAuthenticationTemplateLink` links a connection to an auth template. A
 `CRM_Configuration` row points at a connection through `APIAuthConfigID`; when that is NULL — or
-points at a row that no longer exists — the agent falls back to `CRM_NAME` + the flag table, a
-zero-behaviour-change path for existing customers.
+points at a row that no longer exists — the agent falls back to `CRM_NAME` + the flag table.
 
 ### 3b. Transaction / state — what an operator inspects
 
@@ -336,7 +332,7 @@ zero-behaviour-change path for existing customers.
 | `TimeStampRepository` | `Key` (PK, ≤900 chars), `SavedTimeStamp` (8-byte binary), `UpSertTime`, `SFDCID` | You need the per-record cursor. `Key` is `TimeStamp_Prefix` + the record's source key; `SFDCID` is the destination-side id |
 | `TimeStampRepositoryHistory` | `ID`, then the same four columns | You need the history behind a cursor |
 | `CRMProRunHistory` | `ID`, `RunInfo` (long text), `RunDateTime` | "Did it run, and when?" |
-| `CRMPRO_DASHBOARD_ERROR` | `id`, `SyncDate`, `RecordType`, `ObjectAPIName`, `TimeStampPrefix`, `ErrorKey`, `ErrorDescription`, `NoOfRecordsCount` | Dashboard errors for the **latest** run — the README states this table is truncated each run |
+| `CRMPRO_DASHBOARD_ERROR` | `id`, `SyncDate`, `RecordType`, `ObjectAPIName`, `TimeStampPrefix`, `ErrorKey`, `ErrorDescription`, `NoOfRecordsCount` | Dashboard errors for the **latest** run — this table is truncated each run |
 | `CRMPRO_ERROR_LOG` | `id`, `SyncDate`, `RecordType`, `ObjectAPIName`, `TimeStampPrefix`, `ErrorKey`, `ErrorDescription`, `RunID` | Persistent errors, grouped by `RunID` |
 | `CRMPRO_DeleteRecordInfo` | `ID`, `SObjectName`, `ViewName`, `DeletedDate`, `DeleteRecordXML`, `DeleteStatus`, `SFDCID`, `ExternalKey` | Auditing what the delete pass removed |
 | `CRMBackupObjectList` | `ID`, `CRMObjectName`, `Source`, `EntryDate`, `IsCompleted`, `ViewName`, `TableName`, `IsDeleted`, `IsNeverDeleted`, `DeletedTableDate` | Tracking the backup/field-tracking objects |
@@ -433,7 +429,7 @@ because they wrap a single table, and they behave like the base table in this re
 | Any read of any of these objects | **Safe.** |
 | Editing `Developer_Comment` | **Safe.** Free text, no behaviour |
 | Editing `CRM_FieldList` rows | **Changes the next run** — the intended, ordinary field-mapping edit |
-| Toggling `Is_Active` / `Is_Active_Get_Records` / `Is_Active_Delete_Records` | **Changes the next run.** The everyday lever — but do it with `crmpro_update_process_field`, which carries the delete-query guard. Also see the flag caveats in §8: a few destination modules have been found not to honour these |
+| Toggling `Is_Active` / `Is_Active_Get_Records` / `Is_Active_Delete_Records` | **Changes the next run.** The everyday lever — but do it with `crmpro_update_process_field`, which carries the delete-query guard. Also see the flag caveats in §8: a few destination modules do not honour these |
 | Changing `Sync_Order`, `Sync_Batch_Size`, `Delete_Records_Limit` | **Changes the next run.** Reversible, low blast radius |
 | Changing `Sync_Operation_Type` | **Changes the next run**, and changes *semantics* — upsert vs create vs update vs skip |
 | Changing `TimeStamp_Prefix` | **Dangerous.** It namespaces this object's rows in `TimeStampRepository`. Change it and the object's entire cursor history is orphaned; the next run behaves like a first run for every record |
@@ -534,7 +530,7 @@ not build tooling that parses it. It is a flag wearing an XML column's clothes.
 
 | Column | Holds |
 |---|---|
-| `APIAuthConfigurationJSON` | The connection's auth configuration. Written encrypted by the portal; legacy rows may be plaintext |
+| `APIAuthConfigurationJSON` | The connection's auth configuration. Written encrypted by the portal |
 | `APIAuthConfigurationJSON_Backup` | The previous value, kept before an update |
 | `APIAuthResponseJSON` | The cached auth response — tokens, refreshed by the agent after an OAuth refresh |
 
@@ -596,11 +592,10 @@ reads its configuration and flags at **startup**. An edit made mid-run does not 
 flight, and an edit made between runs takes effect at the next one. There is no "apply now" from the
 `dlake` side — do not tell a customer a change is live because the row updated.
 
-**What a run does afterwards**, per the product's own description of the lifecycle: it loads the
-flags and the configuration rows, creates destination schema where the create flags allow it, detects
-changes by timestamp, transforms, calls the destination API, and writes errors and a summary. Newer
-builds process the configuration rows sequentially in `Sync_Order`, each row resolving its own
-connection, rather than batching rows by platform.
+**What a run does afterwards:** it loads the flags and the configuration rows, creates destination
+schema where the create flags allow it, detects changes by timestamp, transforms, calls the
+destination API, and writes errors and a summary. Configuration rows are processed sequentially in
+`Sync_Order`, each row resolving its own connection.
 
 **Where to look after the run:**
 
@@ -608,7 +603,7 @@ Start with `crmpro_errors` and `crmpro_sync_history` — the fastest read of wha
 Then, for the detail those do not carry:
 
 1. `CRMProRunHistory` — a row with `RunDateTime` proves the agent ran.
-2. `CRMPRO_DASHBOARD_ERROR` — errors from the **latest** run only (truncated each run per the README).
+2. `CRMPRO_DASHBOARD_ERROR` — errors from the **latest** run only (it is truncated each run).
 3. `CRMPRO_ERROR_LOG` — persistent errors; filter by `RunID` to isolate one run.
 4. `TimeStampRepository` — `UpSertTime` on rows whose `Key` starts with the object's
    `TimeStamp_Prefix` shows the cursor actually moved.
@@ -661,19 +656,18 @@ answered from the customer's sync server, not from here.
 - **`CRM_PRO_FORCE_SYNC_RUN` is one-shot.** The agent resets it to `0` at the end of a run. If you
   find it at `0`, that does not mean nobody set it.
 - **`FirstTimeSync = True` costs you a run.** That run creates database objects and **exits without
-  syncing**, then sets the flag to `False`. The product's docs call this two-phase startup and say it
-  must be preserved. Do not set it back to `True` to "refresh schema" unless you intend to burn a run.
-- **`IS_SYNC_RUNNING` can strand.** The README documents it as a concurrency lock and warns that a
-  crash mid-sync can leave it at `1`, blocking future runs until it is manually reset to `0`. That
-  reset is the documented recovery; the enforcement lives outside the tables this skill covers, so
-  verify the agent is genuinely not running before you clear it.
+  syncing**, then sets the flag to `False`. This two-phase startup is intended and must be preserved.
+  Do not set it back to `True` to "refresh schema" unless you intend to burn a run.
+- **`IS_SYNC_RUNNING` can strand.** It is a concurrency lock, and a crash mid-sync can leave it at
+  `1`, blocking future runs until it is manually reset to `0`. That reset is the supported recovery;
+  the enforcement lives outside the tables this skill covers, so verify the agent is genuinely not
+  running before you clear it.
 - **Flags are tenant-global; config rows are per-object.** If a change should affect one object,
   it belongs in `CRM_Configuration`, not in a flag.
-- **Not every destination module honours the flags.** The product's own flag-verification report
-  finds three modules that act without checking `Is_Active` (and two of those without checking
-  `Is_Active_Get_Records` either) — reported as **Trello**, **Asana** and **Shopify**. If setting
-  `Is_Active = false` does not stop a sync, this is the first thing to check, not a Data Lake
-  problem. Treat that report as a point-in-time finding and re-verify against the tenant's build.
+- **Not every destination module honours the flags.** A few modules act without checking `Is_Active`
+  (and some without checking `Is_Active_Get_Records` either) — **Trello**, **Asana** and **Shopify**
+  among them. If setting `Is_Active = false` does not stop a sync, this is the first thing to check,
+  not a Data Lake problem. Re-verify against the tenant's own build.
 - **`DeleteRecordXML` is not XML.** See §6.
 - **The credential JSON is off-limits from here.** No view is created for the Connection Manager
   credential table, by decision, because a write through a view would bypass encryption on save.
