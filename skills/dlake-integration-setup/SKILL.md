@@ -37,8 +37,14 @@ resume at any point.
 
 ```bash
 printf '%s' "$PW" | dlake register start \
-  --email <email> --company "<Company Name>" --phone <tel> --password-stdin
+  --email <email> --company "<Company Name>" --phone <tel> --password-stdin \
+  --consent-crm-backup --consent-erp-backup --consent-phone
 ```
+
+**The three consent flags are the registrant's decision, not yours.** Each one affirms a statement
+(CRM-data backup, ERP-data backup, phone contact) and the server refuses `start` unless all three
+are present. Ask the human and pass the flags only after they have agreed — never pass them
+unprompted.
 
 **Do NOT pass `--instance-type`.** Register as the default (Commercient Data Lake) account. That is
 what makes the platform seed a Data Lake and issue the bootstrap API key, and **every later step
@@ -138,7 +144,23 @@ have their CRM admin available, the authorizing person may be someone else entir
 simply want the ERP side configured first. Select the CRM, finalize step 4, carry on to step 5, and
 complete the authorization whenever the customer is ready — the tenant remembers the CRM choice.
 
-To connect at any point, including long after step 4 is finalized:
+**One command does the whole handshake when a browser is available on this machine.**
+`dlake registration oauth` binds the callback listener on 127.0.0.1:8801 (falling back to 8802 then
+8803), starts the flow against the port it actually bound, opens the browser, verifies the returned
+`state`, and completes the exchange itself:
+
+```bash
+dlake registration oauth --crm <Crm>                      # start -> listen -> complete
+dlake registration oauth --crm <Crm> --fields @start.json # when the CRM needs start inputs
+dlake registration oauth --crm <Crm> --no-browser         # print the URL, finish by hand
+```
+
+Use `--no-browser` on a headless box; the same manual fallback happens by itself when no port can be
+bound or no browser can be launched. A callback whose `state` does not match is refused and nothing is
+exchanged — re-run the command for a fresh handshake.
+
+The individual tools remain available, and are what to use when the browser and the terminal are on
+different machines. To connect at any point, including long after step 4 is finalized:
 
 ```bash
 # 1. Where does this CRM's handshake stand? (none / pending / awaiting PIN / connected)
@@ -178,6 +200,25 @@ On `provider_app_not_configured`: report it, carry on with the rest of the setup
 authorization later with the same commands. Nothing about the integration is lost by finishing that
 part afterwards — and you do **not** need to substitute a different CRM to close step 4. Selecting the
 CRM and running `crm_finalize` completes the step with the handshake still at `status: none`.
+
+## 6b. Provider sub-actions — Salesforce package install, Monday workspace
+
+Two CRMs need one extra call after the authorization, and the connection is INCOMPLETE without it
+even though every other tool reports success:
+
+```bash
+# Salesforce: the Commercient managed-package install URLs. The customer must install
+# the package in their org, or the sync has nothing to talk to.
+dlake registration action --crm Salesforce --action SalesforceSetup
+
+# Monday: list the workspaces, then pick one.
+dlake registration action --crm Monday --action MondayListWorkspaces
+dlake registration action --crm Monday --action MondayPickWorkspace --fields @workspace.json
+```
+
+The server validates the action by name; only those three exist. The same call is
+`dlake admin registration_crm_action --crmName <Crm> --action <Action> [--fields @f.json]`.
+The catalog advertises which stages need it as `SubmitAction: "CRMAction:<name>"`.
 
 ## 7. Wizard step 5 — declare the ERP connector
 
@@ -265,6 +306,7 @@ API key — so the two are independent and you rarely need both.
 | `registration_crm_oauth_complete` | 4/any | Finish with the provider's `code`/`state` |
 | `registration_crm_oauth_confirm_pin` | 4/any | Confirm an out-of-band PIN |
 | `registration_crm_oauth_status` | 4/any | Where a handshake stands |
+| `registration_crm_action` | 4/any | Provider sub-actions: `SalesforceSetup`, `MondayListWorkspaces`, `MondayPickWorkspace` |
 | `registration_crm_finalize` | 4 | Close step 4 |
 | `registration_connector_catalog` | 5 | ERP connectors and their fields |
 | `registration_connector_submit` | 5 | Submit config; `--erpName` declares the ERP |
