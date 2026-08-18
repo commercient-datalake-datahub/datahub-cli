@@ -1,5 +1,19 @@
 # dlake release notes
 
+## 0.5.13 (2026-08-18)
+
+- **Updated guidance in the bundled guides and skills.** When registering,
+  answer one question first: is this an **integration** (your CRM and/or ERP
+  syncing through the platform) or a **standalone Data Lake**? For an
+  integration, pass your real ERP as `--instance-type` (e.g. `SAGEINTACCT`)
+  so the CRM and connector setup match your ERP from the first step; for a
+  standalone Data Lake, omit it — the default is the correct choice there.
+  Your Data Lake is created either way.
+- The bundled guide now covers the TxDownloaderPro management tools available
+  through `dlake admin`, and the TxDownloaderPro skill gained a section on
+  them.
+- No behaviour changes. Upgrade: `npm install -g @commercient/dlake`
+
 ## 0.5.12 (2026-08-18)
 
 - **Corrected the wording of the two backup statements on `dlake register start`.**
