@@ -41,10 +41,11 @@ printf '%s' "$PW" | dlake register start \
   --consent-crm-backup --consent-erp-backup --consent-phone
 ```
 
-**The three consent flags are the registrant's decision, not yours.** Each one affirms a statement
-(CRM-data backup, ERP-data backup, phone contact) and the server refuses `start` unless all three
-are present. Ask the human and pass the flags only after they have agreed — never pass them
-unprompted.
+**The three affirmation flags are the registrant's decision, not yours.** The two backup flags are
+the registrant's guarantee that THEY have made their own backups of their CRM and ERP data (they do
+not ask Commercient to make any backup); `--consent-phone` consents to being contacted by phone.
+The server refuses `start` unless all three are present. Ask the human and pass the flags only
+after they have agreed — never pass them unprompted.
 
 **Do NOT pass `--instance-type`.** Register as the default (Commercient Data Lake) account. That is
 what makes the platform seed a Data Lake and issue the bootstrap API key, and **every later step
