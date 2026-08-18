@@ -47,11 +47,17 @@ not ask Commercient to make any backup); `--consent-phone` consents to being con
 The server refuses `start` unless all three are present. Ask the human and pass the flags only
 after they have agreed — never pass them unprompted.
 
-**Do NOT pass `--instance-type`.** Register as the default (Commercient Data Lake) account. That is
-what makes the platform seed a Data Lake and issue the bootstrap API key, and **every later step
-needs that key**. The customer's real ERP is declared at step 5 — that is the designed place for it,
-and it is what `--erpName` on the connector step is for. Passing an ERP at registration instead
-produces an account that never seeds a Data Lake, and setup stalls with nothing to act on.
+**FIRST, ask the customer what type of setup this is.** There are two answers, and the instance
+type follows from it — never guess:
+
+1. **An integration** (their CRM and/or ERP will sync through the platform): pass their real ERP as
+   `--instance-type` (e.g. `SAGEINTACCT`), so the CRM and connector setup match their ERP from the
+   first step. The Data Lake and the bootstrap API key arrive exactly the same.
+2. **A standalone Data Lake** (no integration): omit `--instance-type` — the default (Commercient
+   Data Lake) is the correct instance type for that, not a fallback.
+
+If the customer does not know their ERP yet, treat it as case 2 for now; the ERP can still be
+declared at step 5 via `--erpName` on the connector step.
 
 **Keep the password.** `dlake register login` needs that exact string to resume from another machine
 or after the local token expires. Generating one inline and piping it straight in leaves it
@@ -316,7 +322,10 @@ API key — so the two are independent and you rarely need both.
 
 ## Things that bite
 
-- **`--instance-type` at registration.** Don't. The ERP belongs at step 5.
+- **Guessing the instance type instead of asking.** Ask whether this is an integration (pass the
+  real ERP) or a standalone Data Lake (omit the flag — the default is the correct choice there,
+  not a fallback). Either way the Data Lake is created; what differs is whether the CRM and
+  connector setup match the customer's ERP from the first step.
 - **A generated password piped straight into `register start`.** Keep it; `register login` needs it.
 - **Assuming the wizard steps are independent.** They are ordered and guarded; a 409 naming a step is
   an instruction, not a failure.
