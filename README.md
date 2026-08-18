@@ -89,7 +89,9 @@ verify it against `SHA256SUMS`, and put it on your `PATH`.
 ```bash
 # No account yet? Sign up from the terminal — no browser, no key needed.
 dlake register start --email you@company.com --company "Acme Inc" --phone +15551234567 \
-  --consent-crm-backup --consent-erp-backup --consent-phone   # each flag affirms one consent
+  --consent-crm-backup --consent-erp-backup --consent-phone
+# the backup flags confirm you have made YOUR OWN backups of your CRM/ERP data;
+# --consent-phone consents to phone contact
 dlake register status --watch          # email verified -> provisioned -> seeded
 ```
 
