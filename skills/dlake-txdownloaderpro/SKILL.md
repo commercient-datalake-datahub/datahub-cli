@@ -34,6 +34,13 @@ This skill covers the Data Lake side of that, in two halves:
   mapping that lives in their JSON- and XML-bearing columns, and knowing exactly which
   filter operators are available to decide what reaches the source system.
 
+**Before you reach for row-level CRUD, read section 14.** The control plane now carries a
+dedicated **`txdownloaderpro_*`** admin tool set that drives the product's own configuration
+API — processes, both mapping documents, ERP flags, the master and per-process switches, and
+three live-CRM helpers. That is the right tool for *configuring* writeback; the exposure and
+row-level work in sections 1–12 is for *inspecting and correcting state* the configuration API
+does not reach.
+
 It does **not** cover installing, scheduling or upgrading the TxDownloaderPro service itself —
 that is done on the customer's own host, outside the `dlake` CLI.
 
@@ -823,6 +830,107 @@ Setting up an integration is a longer journey and this is one step of it:
 
 Do this **after** the tenant exists and has been seeded — the gateway views are created at seed
 time, so there is nothing to expose before then.
+
+---
+
+## 14. Configuring it through its own API — the `txdownloaderpro_*` tools
+
+Sections 1–12 reach the writeback tables as ROWS, over the Data API. That is the right tool for
+inspecting and correcting in-flight state. It is the wrong tool for *configuring* writeback,
+because the product's own rules — the unique process name, the ERP process id the DLL column
+really wants, the webhook row that must be created in the same transaction, the mapping
+validation, the circular-sync warning — live in the configuration API, not in the table.
+
+The control plane carries a dedicated **`txdownloaderpro_*`** tool set for exactly that, and it
+is the **preferred way to configure TxDownloaderPro**. Everything runs from anywhere, over the
+tenant's API key:
+
+```bash
+dlake admin <tool> --profile <tenant> [--arg value ...]
+dlake admin list | grep txdownloaderpro_        # the whole group, with schemas
+dlake admin txdownloaderpro_create_process --help
+```
+
+`--profile` is **always explicit**. There is deliberately no default profile — naming the tenant
+on every call is what stops a command landing on the wrong customer.
+
+**Every `txdownloaderpro_*` tool is Admin-only, reads included.** The key you call with must
+belong to a tenant user who holds the **Admin** role; a key minted from a non-admin user is
+refused with a message naming that role. Keys inherit the roles of the user who minted them, so
+mint operating keys from an Admin account — a refusal here is an account question, not a scope
+you can widen after the fact. The same rule governs the `crmpro_*` and `registration_*` groups.
+
+No `txdownloaderpro_*` tool takes a user id: the platform resolves the customer from the key, so
+a key can only ever drive its own tenant.
+
+### Reads — always safe
+
+| Tool | What it does | Key args |
+|---|---|---|
+| `txdownloaderpro_list_processes` | Every Phase 2 process with its 30-day unresolved-error count — the grid | — |
+| `txdownloaderpro_get_process` | One process in its edit shape, including the four webhook fields | `processId` |
+| `txdownloaderpro_sync_status` | The master switch. Pure read | `oldPortal` (default `false`) |
+| `txdownloaderpro_resolve_erp` | An ERP name or alias to its catalogue `erpId` | `erpName` |
+| `txdownloaderpro_create_options` | Everything a create needs: resolved ERP + process versions + DLL list | `erpName` \| `erpId` |
+| `txdownloaderpro_erp_flags` | Every flag defined for the ERP with this customer's value | `erpId` |
+| `txdownloaderpro_destination_points` | The customer's Generic-API destination points | — |
+| `txdownloaderpro_field_mapping` | The Process Mapping grid | `processId` |
+| `txdownloaderpro_result_mapping` | The stored Result Mapping (null data = not configured) | `processId` |
+| `txdownloaderpro_additional_files` | The ERP's optional files, each marked enabled | `processId`, `erpId` |
+| `txdownloaderpro_circular_sync_check` | Names CRM objects that ALSO have an active Phase 1 config | `processId` |
+| `txdownloaderpro_source_fields` | The source fields a mapping can draw on (live CRM) | `processId` |
+| `txdownloaderpro_preview_xml` | Runs the SAVED query and renders one record as the sync engine's XML | `processId` |
+| `txdownloaderpro_test_query` | Tests a query you have NOT saved yet (live CRM) | `query`, `processId` |
+| `txdownloaderpro_destination_systems` | The shared destination-system catalogue | — |
+| `txdownloaderpro_destination_actions` | The actions on one destination point | `destinationPoint` |
+| `txdownloaderpro_destination_schema` | The bound action's API config + simplified schema | `processId` |
+
+### Mutations — these change what the next run does
+
+| Tool | What it does | Key args |
+|---|---|---|
+| `txdownloaderpro_create_process` | Create a process. **This is what flips a customer to "Phase 2 ready."** | `processName`, `erpProcessId` + see `--help` |
+| `txdownloaderpro_update_process` | Change a process. **Read-merge-write**: send only the fields you are changing and everything else is preserved | `processId`, `fields`, `erpProcessId` \| `erpId` |
+| `txdownloaderpro_delete_process` | Delete a process AND its transaction log | `processId`, `confirm` |
+| `txdownloaderpro_set_sync_enabled` | The master switch, by VALUE. Reports before / after / changed | `enabled`, `oldPortal` |
+| `txdownloaderpro_set_process_flag` | One grid checkbox, **idempotently** | `processId`, `fieldName`, `enabled` |
+| `txdownloaderpro_save_erp_flags` | Save the ERPFlag screen. Reads first and merges, so an unnamed flag keeps its value | `erpId`, `flags` |
+| `txdownloaderpro_save_field_mapping` | Replace the Process Mapping — **complete row set** | `processId`, `rows`, `confirm` |
+| `txdownloaderpro_save_result_mapping` | Replace the Result Mapping — **complete document** | `processId`, `structure`, `confirm` |
+| `txdownloaderpro_delete_result_mapping` | Clear the Result Mapping | `processId`, `confirm` |
+| `txdownloaderpro_save_additional_files` | Replace the enabled-file set. Nothing checked CLEARS it | `processId`, `files`, `confirm` |
+
+### The four traps these tools defuse for you
+
+1. **The save is a whole-row rewrite.** A partial post to the underlying endpoint blanks the
+   process name, the CRM binding, the destination ids and every webhook field — including the
+   plaintext `SecurityKey` a running webhook sync depends on. `txdownloaderpro_update_process`
+   reads the record, overlays only what you sent, and posts the complete entity.
+2. **The ERP process is read as a NAME and written as an ID.** The same save refuses anything
+   but an `ERPProcessId` in that column, so pass `erpProcessId` when you are changing which ERP
+   process runs, or `erpId` so the tool can resolve the stored name back to its id. Supply
+   neither and it refuses *before* writing rather than failing halfway.
+3. **The per-process checkbox endpoint is a blind toggle** — it flips the stored value and
+   ignores what you posted, so a retry after an ambiguous failure flips the customer's process
+   the wrong way. `txdownloaderpro_set_process_flag` reads first and flips only on a genuine
+   mismatch. (`IsStreaming` is accepted by that endpoint but is not returned by the read, so it
+   cannot be verified and is refused here rather than toggled blind.)
+4. **A create needs three catalogue answers.** `txdownloaderpro_create_options` composes them:
+   the resolved ERP, its process versions (the seed defaults) and its DLL list (where
+   `erpProcessId` comes from).
+
+### Two more things worth knowing
+
+- Turning the master switch ON stores the literal `separated`, **not** `true` — writing `true`
+  would silently move the customer onto the old combined code path. The tool writes it; the raw
+  value is never an argument.
+- `txdownloaderpro_test_query` treats **zero rows as a PASS**. `invalid_query` carries the CRM's
+  own rejection text (that is the answer you want); `crm_unavailable` means their CRM is down or
+  the credential expired, which is an outage, not a bad query.
+
+Four Phase 2 endpoints stay REST-only on purpose: registering a shared destination-action
+template (admin plane, service key only), the raw single-process read (a subset of
+`txdownloaderpro_get_process`), the process-structure preview, and the line-item template lookup.
 
 ---
 
