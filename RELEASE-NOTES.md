@@ -1,17 +1,30 @@
 # dlake release notes
 
+## 0.5.12 (2026-08-18)
+
+- **Corrected the wording of the two backup statements on `dlake register start`.**
+  `--consent-crm-backup` and `--consent-erp-backup` confirm that **you have made
+  your own backups** of your CRM and ERP data — they were previously described
+  as consenting to Commercient making backups, which is not what they mean.
+  The flags, their behaviour, and the sign-up flow are unchanged;
+  `--consent-phone` (consent to phone contact) is unchanged. The help text and
+  bundled guides now state the correct meaning. Upgrade:
+  `npm install -g @commercient/dlake`
+
 ## 0.5.11 (2026-08-17)
 
 **Please upgrade if you use `dlake register` — sign-up now requires consent flags.**
 
-- **Changed: `dlake register start` requires three consent flags.** Registration
-  now asks for the same three consents as the sign-up website, and the server
-  refuses to create an account without them. Pass each flag to affirm its
-  statement:
+- **Changed: `dlake register start` requires three affirmation flags.**
+  Registration now asks for the same three statements as the sign-up website,
+  and the server refuses to create an account without them. The backup flags
+  confirm that **you have made your own backups** of your CRM and ERP data
+  (they do not ask Commercient to make any backup). Pass each flag to affirm
+  its statement:
 
   ```
-  --consent-crm-backup    I consent to Commercient backing up my CRM data
-  --consent-erp-backup    I consent to Commercient backing up my ERP data
+  --consent-crm-backup    I confirm I have made my own backup of my CRM data
+  --consent-erp-backup    I confirm I have made my own backup of my ERP data
   --consent-phone         I consent to being contacted by phone
   ```
 
