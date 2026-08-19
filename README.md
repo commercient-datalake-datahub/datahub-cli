@@ -1,23 +1,27 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Commercient Data Lake \ Data Hub" width="360" />
+  <img src="assets/logo.svg" alt="Commercient Data Lake / Data Hub" width="360" />
 </p>
 
-# dlake — Commercient Data Lake \ Data Hub CLI
+# dlake — Commercient Data Lake / Data Hub CLI
 
-> **A place to aggregate all your company data from multiple systems so that AI
+**`dlake` is the CLI for Commercient Data Lake / Data Hub — a backend-as-a-service
+for Microsoft SQL Server: instant REST and GraphQL APIs, row-level security, and
+MCP access for AI agents, over your ERP, CRM, and database data.**
+
+> A place to aggregate all your company data from multiple systems so that AI
 > agents of any type can see it all — and, if set up, even write data back.
 > Code your own solutions against all your data, safely and securely. Let loose
-> your staff's creativity on your data without risk.**
+> your staff's creativity on your data without risk.
 
-`dlake` is the official cross-platform command-line client for the
-**Commercient Data Lake \ Data Hub** — in the spirit of the Stripe and HubSpot
-CLIs. It authenticates with a tenant API key, manages profiles, and wraps the
-platform's REST and admin surfaces with a scripting-friendly UX.
+`dlake` is the official cross-platform command-line client — in the spirit of
+the Stripe and HubSpot CLIs. It authenticates with a tenant API key, manages
+profiles, and wraps the platform's REST and admin surfaces with a
+scripting-friendly UX.
 
 > **Binary distribution.** This repository publishes the official `dlake`
 > binaries and release notes. The source code is not published here.
 
-## What is Commercient Data Lake \ Data Hub?
+## What is Commercient Data Lake / Data Hub?
 
 A managed, per-tenant data platform **built on Microsoft SQL Server** that turns
 your business data into an API- and AI-ready lake. Every tenant gets its own
@@ -26,7 +30,7 @@ row-level security, and object-storage attach are all **native Microsoft SQL
 Server** capabilities, not a bolt-on store. (PolyBase external-table attach and
 vector features require SQL Server 2022+ / 2025.)
 
-- **Bring data in** — through **Commercient SYNC**, Commercient Data Lake \ Data
+- **Bring data in** — through **Commercient SYNC**, Commercient Data Lake / Data
   Hub can **read and write to and from more than 150 systems** (ERPs, CRMs,
   e-commerce, and more — see [www.commercient.com](https://www.commercient.com)).
   Built-in connectors cover HubSpot, Stripe, Salesforce, ServiceTitan, SQL
@@ -73,7 +77,7 @@ the `dlake` command.
 
 Grab the binary for your platform from the latest
 [Release](../../releases/latest) (or from
-`https://datalake-ms-dab.commercient.com/downloads/dlake/<version>/<rid>/dlake[.exe]`),
+`https://downloads.datalake.commercient.com/downloads/dlake/<version>/<rid>/dlake[.exe]`),
 verify it against `SHA256SUMS`, and put it on your `PATH`.
 
 | Platform | Asset |
@@ -303,4 +307,4 @@ Learn more about Commercient and the 150+ systems SYNC connects at
 ## License
 
 The `dlake` binaries are proprietary software, free to use with a Commercient
-Data Lake \ Data Hub subscription — see [LICENSE](LICENSE.txt).
+Data Lake / Data Hub subscription — see [LICENSE](LICENSE.txt).
