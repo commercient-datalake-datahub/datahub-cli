@@ -1,5 +1,42 @@
 # dlake release notes
 
+## 0.5.16 (2026-08-19)
+
+- **New: `dlake normalsync` — choose which of your ERP tables get synced, from the
+  command line.** Normal Sync is the on-premises agent that copies changed rows
+  out of your ERP database and into your Data Lake; this group is the table
+  selection for it:
+
+  ```
+  dlake normalsync tables                 tables you could add
+  dlake normalsync selected               tables you have added, and their settings
+  dlake normalsync readiness              is the sync actually set up, and if not why
+  dlake normalsync select <table> <id>    add a table to your sync
+  dlake normalsync enable | disable <table> <id>   turn one table's sync on or off
+  dlake normalsync filter <id> --where "<sql>" --confirm   sync only some rows
+  dlake normalsync filter <id> --clear --confirm          sync the whole table again
+  dlake normalsync catalog <table> --confirm   register a table name for your ERP
+  dlake normalsync add <table> --confirm      register it and add it in one step
+  ```
+
+  `catalog`, `add` and `filter` need `--confirm`, and the command stops before
+  doing anything if it is missing. Two of those are worth the extra keystroke:
+  the table register is shared by everyone using the same ERP and nothing can
+  remove an entry from it, and a row filter is run against your ERP database by
+  the on-premises agent exactly as you wrote it.
+- **The same operations are still available in full.** Every verb has a longer
+  form as `dlake admin normalsync_<name>`, with `--help` for its arguments;
+  `dlake admin list` names them.
+- **Normal Sync commands need the Admin role.** The API key has to belong to a
+  user who holds Admin on the tenant. If it doesn't, the command says so plainly
+  and exits 3; nothing is changed.
+- Adding tables is not the same as syncing them — `dlake normalsync readiness`
+  reports what is still missing, including the parts (the agent install and your
+  ERP connection details) that these commands cannot set.
+- The bundled Normal Sync guide (`dlake skills show dlake-normalsync`) and the
+  CLI reference ship updated in this version. Upgrade:
+  `npm install -g @commercient/dlake`
+
 ## 0.5.15 (2026-08-19)
 
 - Maintenance: corrected the download-host URL in the bundled guide's install
