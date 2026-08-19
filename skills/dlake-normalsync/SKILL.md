@@ -20,6 +20,12 @@ The customer's tenant already exists and the sync agent is (or is about to be) i
 question is **which ERP tables get cloned into their gateway database**. That is one screen's worth
 of decisions and six endpoints, reachable as eight `normalsync_*` admin tools.
 
+**Use the `dlake normalsync` shorthand group** — it covers all eight, and the examples in this skill
+are written in it. The full form of any verb is the generic passthrough,
+`dlake admin normalsync_<tool>`, which prints each tool's live argument schema with `--help`; reach
+for it when you want the schema, or an argument the shorthand does not expose.
+`dlake normalsync --help` lists the group.
+
 You do NOT need this skill to stand a tenant up (`dlake-integration-setup`), to change what reaches
 the CRM (`dlake-crmpro`), or to push CRM edits back to the ERP (`dlake-txdownloaderpro`).
 
@@ -84,10 +90,12 @@ source DB → [ODBC agent → intermediary DB →] Normal Sync → dbo clone tab
 ## 3. See the current scope
 
 ```bash
-dlake admin normalsync_list_selected_tables
+dlake normalsync selected
+# full form: dlake admin normalsync_list_selected_tables
 ```
 
-One row per table this customer has selected:
+One row per table this customer has selected (the shorthand's table shows the id, name, state,
+filter and index hint; `--json` gives every field, including the two below):
 
 | Field | What it means |
 |---|---|
@@ -109,10 +117,14 @@ the exact opposite of the truth.
 
 ```bash
 # 1. What COULD be added: this ERP's catalogue minus what is already selected
-dlake admin normalsync_available_tables
+dlake normalsync tables
 
-# 2. Select one for this customer — `text` and `value` come from step 1
-dlake admin normalsync_select_table --tableName AR_CUSTOMER --tableId 41
+# 2. Select one for this customer — the name and the TABLE ID come from step 1
+dlake normalsync select AR_CUSTOMER 41
+
+# full form:
+#   dlake admin normalsync_available_tables
+#   dlake admin normalsync_select_table --tableName AR_CUSTOMER --tableId 41
 ```
 
 `normalsync_available_tables` returns `{text, value}` pairs. `text` is the table name **upper-cased
@@ -130,10 +142,14 @@ foresaw, without waiting on Commercient — but read the next paragraph before y
 
 ```bash
 # Step one only: put the name in the ERP's catalogue and get its id back
-dlake admin normalsync_catalog_table --tableName SO_HEADER --confirm true
+dlake normalsync catalog SO_HEADER --confirm
 
 # Or both steps at once
-dlake admin normalsync_add_table --tableName SO_HEADER --confirm true
+dlake normalsync add SO_HEADER --confirm
+
+# full form:
+#   dlake admin normalsync_catalog_table --tableName SO_HEADER --confirm true
+#   dlake admin normalsync_add_table     --tableName SO_HEADER --confirm true
 ```
 
 **The catalogue is SHARED by every customer on that ERP.** The row you write appears in every other
@@ -143,13 +159,14 @@ removing a mistake is a DBA task. So:
 - **check `normalsync_available_tables` first.** An existing row is reused rather than duplicated,
   which means a near-miss spelling (`AR_CUSTOMR`) is exactly how junk gets in permanently;
 - spell the name **exactly** as the ERP does;
-- both tools are confirm-gated for this reason, not because they delete anything.
+- both tools are confirm-gated for this reason, not because they delete anything. The CLI refuses
+  without `--confirm` **before** it calls, so a forgotten flag costs nothing.
 
 `normalsync_catalog_table` does **not** select the table for the customer and does not change what
-syncs. Follow it with `normalsync_select_table`, or use `normalsync_add_table`, which does both.
-The catalogue leg is authoritative and runs first, so if `normalsync_add_table` fails at the select
-step the catalogue row already exists — re-run `normalsync_select_table` with the id it names,
-**not** `normalsync_add_table`, which would touch the shared catalogue a second time.
+syncs. Follow it with `dlake normalsync select`, or use `dlake normalsync add`, which does both.
+The catalogue leg is authoritative and runs first, so if `add` fails at the select step the
+catalogue row already exists — re-run `dlake normalsync select <tableName> <tableId>` with the id it
+names, **not** `add`, which would touch the shared catalogue a second time.
 
 ---
 
@@ -158,13 +175,17 @@ step the catalogue row already exists — re-run `normalsync_select_table` with 
 ### Turn one table's sync on or off
 
 ```bash
-dlake admin normalsync_set_sync_enabled --tableName AR_CUSTOMER --tableId 41 --enabled false
-# or, equivalently
-dlake admin normalsync_set_sync_enabled --tableName AR_CUSTOMER --tableId 41 --command deactivate
+dlake normalsync disable AR_CUSTOMER 41
+dlake normalsync enable  AR_CUSTOMER 41
+
+# full form (equivalent):
+#   dlake admin normalsync_set_sync_enabled --tableName AR_CUSTOMER --tableId 41 --enabled false
+#   dlake admin normalsync_set_sync_enabled --tableName AR_CUSTOMER --tableId 41 --command deactivate
 ```
 
-Pass `enabled` (a boolean) or `command` (`activate` / `deactivate`, accepted in any case). The tool
-constructs the exact literal the API demands. **Do not hand-build that literal against the raw
+The shorthand sends the INTENT as a boolean; on the full form pass `enabled` (a boolean) or
+`command` (`activate` / `deactivate`, accepted in any case). The tool constructs the exact literal
+the API demands. **Do not hand-build that literal against the raw
 endpoint** — see §7, first entry; it is the sharpest edge on this surface.
 
 Disabling is **silent downstream**: the clone table simply stops updating, and CRM Pro keeps pushing
@@ -174,11 +195,17 @@ whatever is already there, with no error anywhere. Nothing will tell you later t
 
 ```bash
 # Sync only part of a table
-dlake admin normalsync_set_row_filter --tableId 41 \
-    --whereClause "CustomerNo > '1000'" --confirm true
+dlake normalsync filter 41 --where "CustomerNo > '1000'" --confirm
+
+# Set just the index hint (the filter is preserved)
+dlake normalsync filter 41 --index IX_CUSTOMER --confirm
 
 # Remove both the filter and the index hint
-dlake admin normalsync_set_row_filter --tableId 41 --clear true --confirm true
+dlake normalsync filter 41 --clear --confirm
+
+# full form:
+#   dlake admin normalsync_set_row_filter --tableId 41 --whereClause "CustomerNo > '1000'" --confirm true
+#   dlake admin normalsync_set_row_filter --tableId 41 --clear true --confirm true
 ```
 
 Two things to hold in mind:
@@ -189,8 +216,8 @@ Two things to hold in mind:
    A malformed filter breaks that table's sync at the next tick, with the error on the agent side.
 2. **The two columns are written together upstream**, so a partial write would silently clear the
    other one. The tool therefore reads the row first and overlays only what you supply — an omitted
-   value is **preserved**. To remove them, pass `clear: true`, which cannot be combined with a new
-   value.
+   value is **preserved**. To remove them, pass `--clear` (`clear: true` on the full form), which
+   cannot be combined with a new value.
 
 Both are why this tool is confirm-gated.
 
@@ -211,7 +238,8 @@ setup:
 | `ERP_SQLDATABASE` | ERP connector setup |
 
 ```bash
-dlake admin normalsync_readiness
+dlake normalsync readiness
+# full form: dlake admin normalsync_readiness
 ```
 
 **This is the honest answer to "is this customer set up?"** — all four phases (ODBC Sync, Normal
@@ -228,9 +256,9 @@ finished, so there is nowhere for the prerequisites to exist.
 
 In order, after any change here:
 
-1. `dlake admin normalsync_list_selected_tables` — read the grid back. The change is there, and
-   `syncStatus` says what you think it says.
-2. `dlake admin normalsync_readiness` — Normal Sync ready, with no issues listed.
+1. `dlake normalsync selected` — read the grid back. The change is there, and the SYNCING column
+   (`syncStatus`) says what you think it says.
+2. `dlake normalsync readiness` — Normal Sync ready, with no issues listed.
 3. Confirm rows are landing in the **clone table** in the tenant database (the
    `SF_ERP_Salesforce_Clone_<TABLE>` table) on the next agent tick.
 
@@ -241,19 +269,20 @@ its job. Anything still missing further along is a CRM Pro question — go to `d
 
 ## 8. Quick reference
 
-| Tool | What it does |
-|---|---|
-| `normalsync_available_tables` | The dropdown: catalogue rows this customer has NOT selected. `value` is the `tableId`. Read-only. |
-| `normalsync_list_selected_tables` | The grid: what this customer HAS selected, with state, filter and index hint. Read-only. |
-| `normalsync_readiness` | All four phases with per-phase reasons — the honest "is this set up?". Read-only. |
-| `normalsync_catalog_table` | Step one: add a name to the ERP's **SHARED** catalogue, return its id. Confirm required. |
-| `normalsync_select_table` | Step two: select a catalogued table for this customer. **This is what flips readiness.** |
-| `normalsync_add_table` | Both steps at once, for a table nobody has catalogued. Same shared-catalogue blast radius. Confirm required. |
-| `normalsync_set_sync_enabled` | Turn one selected table's sync on or off. |
-| `normalsync_set_row_filter` | Set or clear one table's row filter and index hint. Confirm required. |
+| CLI verb | Tool | What it does |
+|---|---|---|
+| `normalsync tables` | `normalsync_available_tables` | The dropdown: catalogue rows this customer has NOT selected. `value` is the `tableId`. Read-only. |
+| `normalsync selected` | `normalsync_list_selected_tables` | The grid: what this customer HAS selected, with state, filter and index hint. Read-only. |
+| `normalsync readiness` | `normalsync_readiness` | All four phases with per-phase reasons — the honest "is this set up?". Read-only. |
+| `normalsync catalog <table> --confirm` | `normalsync_catalog_table` | Step one: add a name to the ERP's **SHARED** catalogue, return its id. Confirm required. |
+| `normalsync select <table> <tableId>` | `normalsync_select_table` | Step two: select a catalogued table for this customer. **This is what flips readiness.** |
+| `normalsync add <table> --confirm` | `normalsync_add_table` | Both steps at once, for a table nobody has catalogued. Same shared-catalogue blast radius. Confirm required. |
+| `normalsync enable`/`disable <table> <tableId>` | `normalsync_set_sync_enabled` | Turn one selected table's sync on or off. |
+| `normalsync filter <tableId> …--confirm` | `normalsync_set_row_filter` | Set (`--where`, `--index`) or clear (`--clear`) one table's row filter and index hint. Confirm required. |
 
-Anything without a curated CLI verb is reachable as `dlake admin <tool_name>`, and
-`dlake admin list | grep normalsync_` prints all eight with their live argument schemas.
+Every verb has a full form, `dlake admin <tool_name>`, and
+`dlake admin list | grep normalsync_` prints all eight with their live argument schemas. Use the
+full form when you want the schema, or `--command activate` instead of the boolean.
 
 ---
 
@@ -262,8 +291,9 @@ Anything without a curated CLI verb is reachable as `dlake admin <tool_name>`, a
 - **`"activate"` is not `"Activate"`.** The underlying endpoint compares the command
   **case-sensitively** against the exact literal `Activate`, and **anything else DISABLES the
   table** — then answers `"Disable AR_CUSTOMER To sync"` as though that had been the request. Use
-  `normalsync_set_sync_enabled` with `--enabled` or `--command` and let it build the literal. If you
-  ever call the raw endpoint by hand, one wrong capital turns a paying customer's data sync off.
+  `dlake normalsync enable`/`disable` (or the full form with `--enabled` / `--command`) and let the
+  tool build the literal. If you ever call the raw endpoint by hand, one wrong capital turns a paying
+  customer's data sync off.
 
 - **The row filter is executed by the on-prem agent** against the customer's ERP database, and is
   not validated as SQL by anything in the path. Do not paste a filter you have not read.
