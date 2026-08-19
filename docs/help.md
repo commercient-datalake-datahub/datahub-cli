@@ -342,7 +342,7 @@ Its 165 setup tools:
 - **Schemas (DDL)** — `list_schemas` (with an `isProtected` flag), `create_schema`, `drop_schema` (destructive; `dbo`/`DLO`/`sys`/`guest`/`db_*` protected, and a non-empty schema fails with the SQL error). Mirrors the DCL `/api/dcl/schemas` endpoints; permissions `schemas.view` (list) / `schemas.manage` (create + drop).
 - **KB semantic-search admin** — `sync_kb_search_views` (zero-drop (re)create of the per-KB `vw_search_contenthub_<Code>` views; obsolete views reported, never dropped — `views.create`), `grant_kb_search_view` (GRANT/`revoke:true` SELECT on a KB view to an API key's DB principal — `views.edit`). Mirrors `/api/ddl/search/kb-views/*`; SQL 2025+ engine-gated.
 
-**Destructive tools** — `restart_dab`, `revoke_api_key`, `delete_dq_rule`, `delete_relationship`, removing an entity via `set_entity_exposure`, `import_nl_definitions` with `mode:"replace"`, `disable_event_capture`, `delete_webhook_subscription`, `disable_time_travel`, `disable_change_tracking`, `disable_change_logging`, `deactivate_user`, `delete_s3_connection`, `s3_delete_object`, `drop_view`, `drop_table`, `drop_column`, `drop_index`, `drop_fulltext_index`, `drop_function`, `drop_procedure`, `drop_trigger`, `drop_schema`, `crmpro_delete_process`, `crmpro_apply_template`, and `run_schema_sweep` — require `confirm: true`. **`disable_change_tracking` asks for more than that:** it takes a *scoped* confirm — `confirm:"<tableName>"` for one table, `confirm:"DATABASE"` for the whole database — and a bare `confirm:true` is refused. That is deliberate: disabling change tracking throws away every consumer's sync watermark for those tables, so each one needs a full re-baseline before it can resume, and a database-wide disable un-registers **every** tracked table (re-enabling the database does not bring them back). Run `list_change_tracking` first and keep the output — it is the only record of what to restore. Config changes to exposure/settings/meanings/relationships persist immediately but reach the live Data API only after `restart_dab`. Revoking a key takes effect immediately across every surface, including cached MCP sessions. `create_api_key` and `create_webhook_subscription` each return their secret **once** in the tool result — capture it immediately. Every admin write is audited as `mcp-admin:<tool>`.
+**Destructive tools** — `restart_dab`, `revoke_api_key`, `delete_dq_rule`, `delete_relationship`, removing an entity via `set_entity_exposure`, `import_nl_definitions` with `mode:"replace"`, `disable_event_capture`, `delete_webhook_subscription`, `disable_time_travel`, `disable_change_tracking`, `disable_change_logging`, `deactivate_user`, `delete_s3_connection`, `s3_delete_object`, `drop_view`, `drop_table`, `drop_column`, `drop_index`, `drop_fulltext_index`, `drop_function`, `drop_procedure`, `drop_trigger`, `drop_schema`, `crmpro_delete_process`, `crmpro_apply_template`, `txdownloaderpro_delete_process` (and the TxDownloaderPro tools that replace a whole stored mapping), `normalsync_catalog_table`, `normalsync_add_table`, `normalsync_set_row_filter`, and `run_schema_sweep` — require `confirm: true`. **`disable_change_tracking` asks for more than that:** it takes a *scoped* confirm — `confirm:"<tableName>"` for one table, `confirm:"DATABASE"` for the whole database — and a bare `confirm:true` is refused. That is deliberate: disabling change tracking throws away every consumer's sync watermark for those tables, so each one needs a full re-baseline before it can resume, and a database-wide disable un-registers **every** tracked table (re-enabling the database does not bring them back). Run `list_change_tracking` first and keep the output — it is the only record of what to restore. Config changes to exposure/settings/meanings/relationships persist immediately but reach the live Data API only after `restart_dab`. Revoking a key takes effect immediately across every surface, including cached MCP sessions. `create_api_key` and `create_webhook_subscription` each return their secret **once** in the tool result — capture it immediately. Every admin write is audited as `mcp-admin:<tool>`.
 
 > **After a tool-surface update, restart your MCP client.** An MCP client caches the tool list per session (it pulls the schema once at connect), so Claude Desktop / claude.ai won't show the new tools until you restart the client or re-add the connector.
 
@@ -374,18 +374,35 @@ Three things worth knowing before you change anything:
 
 Deeper operating guidance — the flag table, field mapping, cursors and the tables behind the tools — lives in the **`dlake-crmpro`** skill that ships with the CLI.
 
+## TxDownloaderPro (writeback sync)
+
+**TxDownloaderPro** runs the opposite direction to CRMPro: it reads transactions out of the CRM and writes them back toward the customer's source system. The **`txdownloaderpro_*`** admin tools cover the full setup surface — list and read processes (`txdownloaderpro_list_processes`, `txdownloaderpro_get_process`), create and update them, edit the field mapping and the Result Mapping, preview the generated XML, test a process query, check sync status and run the circular-sync check. Everything CRMPro's section says about operation applies here too: the group is **Admin-only**, every call names the tenant (`--profile` from the CLI), and configuration edits land on the agent's next run. Tools that **replace or delete stored state** — deleting a process, replacing a whole mapping — say so in their descriptions and require `confirm: true`. The deeper guide is the **`dlake-txdownloaderpro`** skill.
+
+## Normal Sync (source → clone tables)
+
+**Normal Sync** is the third agent, and it runs first in the chain: an on-premises **change-tracking** sync agent for Microsoft SQL Server (2008 R2 and later) that extracts changed data from the customer's source database into the clone tables of their gateway database. Sources that are not SQL Server use the **ODBC sync agent** instead, which lands the data in an intermediary database that Normal Sync then moves into the clone tables. From there **CRMPro** consumes the clone tables (through views) and pushes to the CRM — so the three products chain: **Normal Sync → clone tables → CRMPro → CRM**, with **TxDownloaderPro** closing the loop back toward the source.
+
+The **`normalsync_*`** admin tools manage which source tables the agent syncs: `normalsync_available_tables` (the ERP's table catalogue), `normalsync_list_selected_tables`, `normalsync_readiness` (are the prerequisites in place?), `normalsync_select_table` (add an already-catalogued table to this customer's sync), `normalsync_set_sync_enabled` (per-table activate/deactivate), `normalsync_set_row_filter` (the per-table row filter and index hint), and — for tables never synced anywhere before — `normalsync_catalog_table` / the composed `normalsync_add_table`.
+
+Two things deserve care:
+
+- **The table catalogue is shared per ERP.** Cataloguing a new table writes a row that **every customer on that ERP** sees in their available-tables list. That is deliberate — it is how a never-before-synced table becomes syncable without waiting on Commercient — but there is no API that removes a catalogue row, so a mistake is a manual database cleanup. Both cataloguing tools require `confirm: true` for exactly this reason.
+- **Row filters are executed against the customer's source database** by the on-premises agent. `normalsync_set_row_filter` is read-merge-write (an omitted field is preserved; clearing is explicit) and confirm-gated.
+
+The deeper guide — prerequisites, the two-call add sequence, and how the ODBC agent stacks — is the **`dlake-normalsync`** skill.
+
 ## Command-Line Interface (dlake)
 
 `dlake` is the Data Lake's command-line client (in the spirit of the Stripe / HubSpot CLIs) — script your tenant from a terminal or CI with an API key. The **CLI** entry in the left menu opens the full guide with every command.
 
 **Install** — download the self-contained binary for your platform (no runtime needed) and put it on your `PATH`:
 
-- [Windows (win-x64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.14/win-x64/dlake.exe)
-- [Linux x64](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.14/linux-x64/dlake)
-- [Linux ARM64 (linux-arm64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.14/linux-arm64/dlake)
-- [macOS Apple Silicon (osx-arm64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.14/osx-arm64/dlake)
-- [macOS Intel (osx-x64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.14/osx-x64/dlake)
-- [SHA256 checksums](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.14/SHA256SUMS) · or `npm install -g @commercient/dlake`
+- [Windows (win-x64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.15/win-x64/dlake.exe)
+- [Linux x64](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.15/linux-x64/dlake)
+- [Linux ARM64 (linux-arm64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.15/linux-arm64/dlake)
+- [macOS Apple Silicon (osx-arm64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.15/osx-arm64/dlake)
+- [macOS Intel (osx-x64)](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.15/osx-x64/dlake)
+- [SHA256 checksums](https://datalake-ms-dab.commercient.com/downloads/dlake/0.5.15/SHA256SUMS) · or `npm install -g @commercient/dlake`
 
 **macOS — sign the binary once after downloading.** The Mac builds ship unsigned, so run `xattr -dr com.apple.quarantine ./dlake` then `codesign --force --sign - ./dlake` (then `chmod +x ./dlake`). On Apple Silicon this is required for reliability, not just for Gatekeeper: an unsigned binary is validated page-by-page as it runs and can abort **intermittently at startup** — `System.AccessViolationException ... at Thread+StartHelper.InitializeCulture()`, typically on rapid back-to-back invocations, where a retry succeeds. Ad-hoc signing removes it. (The `InitializeCulture` frame is misleading: `dlake` runs with invariant globalization on every platform, so there is no culture data involved.)
 
