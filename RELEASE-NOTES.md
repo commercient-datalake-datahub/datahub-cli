@@ -1,5 +1,11 @@
 # dlake release notes
 
+## 0.5.14 (2026-08-19)
+
+- Package metadata refresh: the npm package now carries a proper description,
+  keywords, and links to the GitHub repository and the official downloads
+  site. No functional changes. Upgrade: `npm install -g @commercient/dlake`
+
 ## 0.5.13 (2026-08-18)
 
 - **Updated guidance in the bundled guides and skills.** When registering,
