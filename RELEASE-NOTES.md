@@ -1,5 +1,11 @@
 # dlake release notes
 
+## 0.5.15 (2026-08-19)
+
+- Maintenance: corrected the download-host URL in the bundled guide's install
+  example and refreshed package links. No functional changes. Upgrade:
+  `npm install -g @commercient/dlake` (or `npm install -g datalake`)
+
 ## 0.5.14 (2026-08-19)
 
 - Package metadata refresh: the npm package now carries a proper description,
