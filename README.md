@@ -76,8 +76,9 @@ the `dlake` command.
 ### Direct download
 
 Grab the binary for your platform from the latest
-[Release](../../releases/latest), verify it against `SHA256SUMS`, and put it
-on your `PATH`.
+[Release](../../releases/latest) (or from
+`https://datalake-ms-dab.commercient.com/downloads/dlake/<version>/<rid>/dlake[.exe]`),
+verify it against `SHA256SUMS`, and put it on your `PATH`.
 
 | Platform | Asset |
 |---|---|
