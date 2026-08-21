@@ -1,5 +1,21 @@
 # dlake release notes
 
+## 0.5.17 (2026-08-21)
+
+- **Updated bundled agent skills.** The integration-setup skill now gives an AI
+  agent much firmer guidance through the CRM OAuth step:
+  - which callback style to use per CRM (HubSpot always uses the website
+    flow - no local listener needed, and the browser can be on any machine);
+  - completing the token exchange promptly once the authorization lands
+    (authorization codes are short-lived);
+  - that confirmation PINs arrive **by email** after the exchange completes -
+    they are never shown on screen;
+  - asking you before deferring a CRM connection or submitting placeholder ERP
+    credentials, and saying clearly when a setup will not sync yet.
+- The npm packages (`@commercient/dlake` and the `datalake` alias) now link
+  the GitHub repository and the browsable skills folder from their pages.
+- No CLI command changes. Upgrade: `npm install -g @commercient/dlake`
+  (or `npm install -g datalake`).
 ## 0.5.16 (2026-08-19)
 
 - **New: `dlake normalsync` — choose which of your ERP tables get synced, from the
