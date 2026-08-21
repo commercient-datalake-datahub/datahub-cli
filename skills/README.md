@@ -14,10 +14,14 @@ and error" into "already knows the happy path."
 | [`dlake-txdownloaderpro/`](dlake-txdownloaderpro/SKILL.md) | Set up **and operate TxDownloaderPro** — the CRM→source (writeback) sync agent. Expose its gateway objects to the Data API and scope a key to them, then CRUD the configuration and in-flight transaction rows, edit the field mapping in their JSON/XML columns, and use the filter-operator vocabulary that decides which retrieved CRM records reach the source. Covers exposure-vs-key-scope, `keyFields`, and the `SFUpdated` state machine. |
 | [`dlake-normalsync/`](dlake-normalsync/SKILL.md) | Choose which ERP tables **Normal Sync** — the on-prem change-tracking agent for SQL Server 2008 R2+ — clones into the gateway database's `dbo` clone tables. The available-tables dropdown, the two-call add, per-table sync toggles and row filters, the shared-catalogue semantics, and the prerequisites this surface cannot set (so finishing it does not mean the customer syncs). |
 | [`dlake-crmpro/`](dlake-crmpro/SKILL.md) | Set up **and operate CRMPro** — the source→CRM (forward) sync agent that pushes ERP data into the supported CRM and e-commerce platforms. Flag-driven: CRUD the configuration and run-history/error tables, read and edit the field mapping, and know which of its tables are reachable as lake views and which deliberately are not. |
+| [`dlake-odbcsync/`](dlake-odbcsync/SKILL.md) | Configure **ODBC Sync** — the agent for a source that is NOT Microsoft SQL Server, which stages data through an S3 bucket into an intermediary database Normal Sync then consumes. The bucket registry, the IAM IP allow-list, the agent's `BridgeClient.exe.config` (and the encrypted-echo trap), and the two verification reads. |
+| [`dlake-apisync/`](dlake-apisync/SKILL.md) | Set up **Generic API Sync** — the product for a source that is an API rather than a database. Enable it (schema provision + flag), describe the endpoints the agent calls (the two-mode save trap), read the shared per-ERP template catalogue, and read a hosted customer's real ERP columns. |
 
 Use `dlake/` for a tenant you already have and `dlake-integration-setup/` for one you are
-creating. The last three cover the **sync agents**, in pipeline order: `dlake-normalsync/` extracts
-the customer's ERP tables into the gateway database's clone tables, `dlake-crmpro/` pushes those
+creating. The rest cover the **sync agents**, in pipeline order: `dlake-normalsync/` extracts
+the customer's ERP tables into the gateway database's clone tables (with `dlake-odbcsync/`
+configuring the ODBC agent that stacks underneath it for non-SQL-Server sources, and
+`dlake-apisync/` the product for API sources), `dlake-crmpro/` pushes those
 clone tables source→CRM, and `dlake-txdownloaderpro/` moves changes back CRM→source. Most
 integrations run Normal Sync plus CRMPro; add TxDownloaderPro when changes made in the CRM must
 travel back. Normal Sync, CRM Pro and TxDownloaderPro are three distinct products — if a table is
@@ -40,6 +44,8 @@ A skill is just a folder. Copy it into the directory your harness scans for skil
 cp -r skills/dlake                   ~/.claude/skills/   # operate an existing tenant
 cp -r skills/dlake-integration-setup ~/.claude/skills/   # set up a new integration
 cp -r skills/dlake-normalsync        ~/.claude/skills/   # which ERP tables get cloned
+cp -r skills/dlake-odbcsync          ~/.claude/skills/   # the non-SQL-Server source agent
+cp -r skills/dlake-apisync           ~/.claude/skills/   # the API-source sync product
 cp -r skills/dlake-crmpro            ~/.claude/skills/   # the source→CRM sync agent
 cp -r skills/dlake-txdownloaderpro   ~/.claude/skills/   # the CRM→source sync agent
 ```
