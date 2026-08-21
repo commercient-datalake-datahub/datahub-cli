@@ -9,7 +9,9 @@ description: >-
   "why is this table not in the clone tables?". Normal Sync is the ERP-side EXTRACT only. For the
   CRM push that consumes the clone tables use the `dlake-crmpro` skill; for the CRM-to-source
   writeback leg use `dlake-txdownloaderpro`; for standing a new tenant up from scratch use
-  `dlake-integration-setup`.
+  `dlake-integration-setup`. When the source is NOT Microsoft SQL Server, the ODBC agent stacks
+  underneath this one — configure it with `dlake-odbcsync`; when the source is an API rather than
+  a database, use `dlake-apisync`.
 ---
 
 # Choosing what Normal Sync clones, with `dlake`
