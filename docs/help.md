@@ -431,7 +431,7 @@ dlake admin apisync_enable --profile <tenant> --confirm true
 dlake admin apisync_templates --profile <tenant> --erpName SYSPRO
 ```
 
-The one trap: the endpoint-config save writes **either** the configuration JSON **or** the metadata (name, auth id, order, soft-delete flag) — never both in one call; sending both upstream would silently discard the metadata, so the tool refuses the mix and requires `isDeleted` explicitly on the metadata leg. Endpoint JSON is stored **plaintext** and read directly by the agent — credentials never go in it; they belong in the Connection Manager configuration it references. Template *authoring* is deliberately operator-only: the shared catalogue is append-only (no update, no delete), so a bad row is permanent and public to every customer of that ERP. The deeper guide is the **`dlake-apisync`** skill.
+The one trap: the endpoint-config save writes **either** the configuration JSON **or** the metadata (auth id, order, soft-delete flag) — never both in one call; sending both upstream would silently discard the metadata, so the tool refuses the mix and requires `isDeleted` explicitly on the metadata leg. The object name sits outside that split and is required on both calls (the API refuses a blank one, and on the JSON call it is validation only). Endpoint JSON is stored **plaintext** and read directly by the agent — credentials never go in it; they belong in the Connection Manager configuration it references. Template *authoring* is deliberately operator-only: the shared catalogue is append-only (no update, no delete), so a bad row is permanent and public to every customer of that ERP. The deeper guide is the **`dlake-apisync`** skill.
 
 ## Command-Line Interface (dlake)
 
@@ -469,7 +469,7 @@ dlake normalsync selected                         # the ERP tables Normal Sync c
 
 **Passing argument values.** `dlake admin <tool>` / `dlake tool <tool>` map `--arg value` onto each tool's JSON schema. Booleans take `true/false/1/0/yes/no`; an arg whose type is an **array or object** takes **JSON** — `--columns '[{"name":"Id","type":"INT","identity":true,"primaryKey":true}]'` — or, better, **`@file.json`** to read the value from a file: `--columns @columns.json`. `@file` works for **any** argument (and is the reliable form on Windows, where the shell mangles quoted JSON); `@@` passes a literal leading `@`. Simple lists still accept the comma form (`--columns sku,region`, `--ids 1,2,3`). `dlake admin <tool> --help` prints the schema and repeats these conventions.
 
-Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 165 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, and table-to-S3 export).
+Multiple tenants = multiple **profiles** (`--profile`), like the Stripe CLI's projects. Everything supports `--json` for scripting. The `dlake admin <tool>` passthrough exposes the full Admin Control Plane above — the same 217 tools, same permission rules (full-scope admin key), with `--help` generated from each tool's schema. First-class `dlake s3 …` commands add the object-storage outlet (connections, browse, streaming put/get, and table-to-S3 export).
 
 ## Row-Level Security
 
