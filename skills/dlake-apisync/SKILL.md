@@ -48,12 +48,13 @@ dlake --profile <slug> admin apisync_template_by_id --id 7
 # 4. (hosted customers only) the real columns of an ERP table, for building the config
 dlake --profile <slug> admin apisync_table_schema --tableName ArCustomer
 
-# 5. Describe an endpoint — TWO calls, never one (see section 3)
+# 5. Describe an endpoint — TWO calls, never one (see section 3).
+#    objectName is required on BOTH, including the JSON call.
 dlake --profile <slug> admin apisync_save_endpoint_config --configId 0 \
     --objectName AR_CUSTOMER --authConfigId 12 --isConfigForFastSync true \
     --syncOrder 1 --isDeleted false --confirm true
 dlake --profile <slug> admin apisync_save_endpoint_config --configId <id> \
-    --configurationJson @endpoint.json --confirm true
+    --objectName AR_CUSTOMER --configurationJson @endpoint.json --confirm true
 ```
 
 Reading `apisync_enable`'s result precisely: `skipped` naming `usp_GetGenericAPIData` on a
@@ -75,10 +76,16 @@ ignored); empty writes **the metadata including `isDeleted`** and leaves the JSO
 both would lose the metadata and report success — so the tool **refuses the mix**. Always two
 calls:
 
-1. **Metadata leg** — `objectName`, `authConfigId`, `isConfigForFastSync`, `syncOrder`, and
-   `isDeleted` **which is required**: the procedure defaults an omitted flag to `1`, i.e. a soft
-   delete nobody asked for. A soft delete IS this leg with `--isDeleted true`.
-2. **JSON leg** — `configurationJson` alone.
+1. **Metadata leg** — `authConfigId`, `isConfigForFastSync`, `syncOrder`, and `isDeleted`
+   **which is required**: the procedure defaults an omitted flag to `1`, i.e. a soft delete
+   nobody asked for. A soft delete IS this leg with `--isDeleted true`.
+2. **JSON leg** — `configurationJson`.
+
+**`objectName` sits outside that split and is required on both.** The API refuses a blank
+`APISyncObjectName` before the mode logic runs (blank rows were found in production, so the
+validation was added), which means a JSON call without it can never succeed. On the JSON leg it
+is validation only: the procedure ignores it, so the stored name does not change. Send the row's
+real object name in both calls.
 
 `configId` `0` creates; a real id updates. The response cannot tell you which happened (the value
 means different things on SQL Server vs PostgreSQL) — re-read the row if you need to know.
