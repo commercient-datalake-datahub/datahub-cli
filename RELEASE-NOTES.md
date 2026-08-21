@@ -1,5 +1,38 @@
 # dlake release notes
 
+## 0.5.18 (2026-08-21)
+
+- **New: ODBC Sync setup from the CLI.** Eight `odbcsync_*` admin tools configure
+  the sync agent for sources that are not Microsoft SQL Server: the S3 bucket
+  registry, the bucket's IP allow-list (the step without which the agent cannot
+  upload), the agent's configuration file, and two verification reads (what the
+  agent has staged, and the last 24 hours of errors).
+
+  ```
+  dlake admin odbcsync_status
+  dlake admin odbcsync_register_bucket --bucketName <name> --confirm true
+  dlake admin odbcsync_allow_ip --bucketName <name> --ipAddress <ip> --confirm true
+  dlake admin odbcsync_read_agent_config
+  ```
+- **New: Generic API Sync setup from the CLI.** Six `apisync_*` admin tools turn
+  the API-source sync product on and describe the endpoints it calls: enable
+  (idempotent), endpoint configurations, the per-ERP endpoint-template catalogue,
+  and a hosted customer's real ERP table columns.
+
+  ```
+  dlake admin apisync_status
+  dlake admin apisync_enable --confirm true
+  dlake admin apisync_templates --erpName <erp>
+  ```
+- Every new tool is Admin-only (reads included), acts only on the key's own
+  tenant, and shows its argument schema with `dlake admin <tool> --help`.
+- **Two new bundled agent skills** — `dlake-odbcsync` and `dlake-apisync` —
+  teach an AI agent both surfaces, including the ordering and the traps (the
+  config editor's encrypted settings; the endpoint save's two modes).
+- The Help and API guides gain matching sections. Upgrade:
+  `npm install -g @commercient/dlake` (or `npm install -g datalake`).
+- If your MCP client was already connected, restart it (or re-add the connector)
+  to see the new tools — the tool list is cached per session.
 ## 0.5.17 (2026-08-21)
 
 - **Updated bundled agent skills.** The integration-setup skill now gives an AI
