@@ -146,57 +146,106 @@ dlake admin registration_crm_finalize
 
 ## 6. Connecting an OAuth CRM — now or later
 
-**Deferring the OAuth handshake is fully supported and often the right call.** The customer may not
-have their CRM admin available, the authorizing person may be someone else entirely, or you may
-simply want the ERP side configured first. Select the CRM, finalize step 4, carry on to step 5, and
-complete the authorization whenever the customer is ready — the tenant remembers the CRM choice.
+**Deferring the OAuth handshake is fully supported — but it is the user's decision, not yours.** The
+customer may not have their CRM admin available, or the authorizing person may be someone else
+entirely. Offer the handshake first; defer only when the user chooses to. If deferring: select the
+CRM, finalize step 4, carry on to step 5, and complete the authorization whenever the customer is
+ready — the tenant remembers the CRM choice. A deferred handshake must be named in your summary:
+CRMPro cannot push to the CRM until it is completed.
 
-**One command does the whole handshake when a browser is available on this machine.**
-`dlake registration oauth` binds the callback listener on 127.0.0.1:8801 (falling back to 8802 then
-8803), starts the flow against the port it actually bound, opens the browser, verifies the returned
-`state`, and completes the exchange itself:
+**There are two legs, and the difference is where the provider sends the callback.** Check the CRM's
+`callbackMode` in the catalog:
+
+| `callbackMode` | Callback goes to | Use when |
+|---|---|---|
+| `loopback` | A listener the CLI binds on `127.0.0.1:8801-8803` | The browser is on the same machine as the CLI |
+| `website` | The platform's own public callback endpoint | The provider will not redirect to a loopback address |
+| `both` | Either — you choose per handshake | HubSpot; see below |
+
+**Pick the leg BEFORE running anything.** The default command shape is the loopback leg, and on the
+wrong provider it fails only after the customer is already staring at an error:
+
+- **HubSpot: always the website leg** (`--no-browser`). Its OAuth apps are per-ERP, and they register
+  the platform's callback URL, not the CLI's loopback ports. A loopback attempt fails **pre-consent**
+  with HubSpot's "redirect URL doesn't match" page — if you see that page, you picked the wrong leg;
+  re-run with `--no-browser`, do not retry the same command.
+- **Loopback only when both are true:** the CRM's app is known to register the loopback URIs *and* the
+  browser is on the machine running `dlake`.
+- When in doubt on a `both` CRM, the website leg always works — it uses the redirect every provider app
+  already registers.
 
 ```bash
-dlake registration oauth --crm <Crm>                      # start -> listen -> complete
+dlake registration oauth --crm <Crm> --no-browser         # website leg: print the URL, poll, complete
+dlake registration oauth --crm <Crm>                      # loopback leg: listen on 127.0.0.1, complete
 dlake registration oauth --crm <Crm> --fields @start.json # when the CRM needs start inputs
-dlake registration oauth --crm <Crm> --no-browser         # print the URL, finish by hand
 ```
 
-Use `--no-browser` on a headless box; the same manual fallback happens by itself when no port can be
-bound or no browser can be launched. A callback whose `state` does not match is refused and nothing is
-exchanged — re-run the command for a fresh handshake.
+**On a `both` CRM, `--no-browser` selects the website leg** — the start call sends no redirect URI, so
+the platform authorizes against its own public callback and the code is delivered server-side. The
+consent can happen in any browser, on any network — right for HubSpot (above) and whenever the person
+authorizing is not sitting at the machine running `dlake`; the CLI picks the result up by polling.
 
-The individual tools remain available, and are what to use when the browser and the terminal are on
-different machines. To connect at any point, including long after step 4 is finalized:
+**On the loopback leg** the same command without `--no-browser` binds the listener on 127.0.0.1:8801
+(falling back to 8802 then 8803), starts the flow against the port it actually bound, opens the
+browser, verifies the returned `state`, and completes the exchange itself.
+
+A callback whose `state` does not match is refused and nothing is exchanged — re-run the command for a
+fresh handshake. State tokens are single-use and expire 30 minutes after the start.
+
+The individual tools remain available, and are what to use on the website leg or when the browser and
+the terminal are on different machines. To connect at any point, including long after step 4 is
+finalized:
 
 ```bash
 # 1. Where does this CRM's handshake stand? (none / pending / awaiting PIN / connected)
 dlake admin registration_crm_oauth_status --crmName <Crm>
 
-# 2. Begin — returns the authorization URL for the customer to open in a browser.
-#    --redirectUri is REQUIRED for any CRM whose callback comes back to the machine
-#    running the wizard (the catalog shows callbackMode other than "website").
-#    Only ports registered with the providers are accepted: 8801, 8802, 8803.
+# 2. Begin — returns the authorization URL for the customer to open in a browser,
+#    plus the `state` to keep for step 3.
+#    LOOPBACK LEG: --redirectUri is REQUIRED, and only ports registered with the
+#    providers are accepted: 8801, 8802, 8803.
 dlake admin registration_crm_oauth_start --crmName <Crm> \
     --redirectUri http://127.0.0.1:8801/callback/
 
-# 3a. Finish with what the provider hands back
-dlake admin registration_crm_oauth_complete --crmName <Crm> --code <code> --state <state>
+#    WEBSITE LEG: omit --redirectUri entirely. Allowed for callbackMode
+#    "website" and "both"; the platform supplies its own registered callback.
+dlake admin registration_crm_oauth_start --crmName <Crm>
 
-# 3b. …or, for providers whose flow ends in a PIN the user reads off the screen
+# 3a. Finish. On the loopback leg pass the code your listener caught; on the
+#     website leg pass only --state — the code was delivered to the platform and
+#     is read from the parked attempt (status never returns it).
+dlake admin registration_crm_oauth_complete --crmName <Crm> --state <state> [--code <code>]
+
+# 3b. …then, for providers whose flow ends in a PIN, confirm it
 dlake admin registration_crm_oauth_confirm_pin --crmName <Crm> --pin <pin>
 ```
 
 `registration_crm_oauth_status` is safe to call at any time and is the right way to check whether a
-deferred connection has since been completed. Which of `oauth_complete` / `oauth_confirm_pin` applies
-is visible in the CRM's `stages` in the catalog — a `pin` stage means the flow ends with a PIN.
+deferred connection has since been completed. On the website leg it is also how you learn the browser
+leg finished: poll until it reports `code_received`, then run `oauth_complete`. Which of
+`oauth_complete` / `oauth_confirm_pin` applies is visible in the CRM's `stages` in the catalog — a
+`pin` stage means the flow ends with a PIN.
+
+**`code_received` is NOT success — it is a countdown.** It means the provider's authorization code is
+parked and waiting, and provider codes are single-use and expire within minutes. Run `oauth_complete`
+**immediately**; do not finalize the step, move on to other wizard work, or wait for anything first.
+A code left sitting expires, the exchange then fails, and the only recovery is a full re-authorize —
+the customer has to consent all over again. The handshake is done only at `connected`.
+
+**The PIN is emailed, not displayed — and only `oauth_complete` sends it.** For the four PIN providers
+(Salesforce, Zoho, HubSpot, Klaviyo) `oauth_complete` parks the tokens and sends a confirmation PIN to
+the registration account's email address; nothing shows it on screen, and no email exists until the
+complete call runs. Do not go looking for it on the callback page — that page only says the
+authorization was recorded — and do not go looking for a "send/resend PIN" command: **there is none.**
+PIN delivery is a side effect of `oauth_complete`; the only step after it is
+`oauth_confirm_pin --pin <pin>` with the code from the email.
 
 **Two different refusals, in this order.** Read the code, not the prose:
 
 | Code | Status | Meaning |
 |---|---|---|
-| `missing_redirect_uri` | 400 | You sent no callback URL. Supply `--redirectUri` as above. |
-| `invalid_redirect_uri` | 400 | The URL you sent is not an http loopback address. |
+| `missing_redirect_uri` | 400 | You sent no callback URL to a `loopback`-only CRM. Supply `--redirectUri` as above. A `website` or `both` CRM never answers this — omitting the redirect is how you ask for the website leg. |
+| `invalid_redirect_uri` | 400 | The URL you sent is not an http loopback address. It is used verbatim, so the guard applies whenever you supply one. |
 | `provider_app_not_configured` | 424 | The platform holds no OAuth app credentials for this provider. Nothing you can fix from here. |
 
 The first two are yours to correct; the third is platform-side. You reach it only *after* supplying a
@@ -254,16 +303,21 @@ dlake admin registration_connector_provision
 dlake admin registration_provisioning_status              # poll until completed or failed
 ```
 
-### Placeholder ERP details are fine — this is the normal case
+### Placeholder ERP details are supported — but ASK before using them
 
-Customers frequently do not have their ERP server, database and credentials to hand at this point,
-and waiting for them blocks nothing. **Submit placeholders and move on.** Neither `connector_submit`
-nor `connector_provision` opens a connection to the ERP: submit parks the configuration, and
-provisioning sets up the tenant around it. A provisioning run completes normally with placeholder
-values.
+Customers frequently do not have their ERP server, database and credentials to hand at this point.
+The platform supports submitting placeholders: neither `connector_submit` nor `connector_provision`
+opens a connection to the ERP — submit parks the configuration, provisioning sets up the tenant
+around it, and a provisioning run completes normally with placeholder values.
 
-Do not read that completion as "the ERP connection works" — it means the tenant is configured. The
-credentials are exercised when data actually syncs.
+**Placeholders are the user's decision, not yours.** Always ask for the real ERP credentials first;
+submit placeholders only when the user says they are not available (or explicitly tells you to defer).
+Never silently substitute placeholders and move on — a setup that looks finished but can never sync is
+worse than one that visibly waits on an answer. When placeholders ARE used, say so out loud in your
+summary and record that **no data will flow until the real values are re-submitted**.
+
+Do not read a completed provisioning run as "the ERP connection works" — it means the tenant is
+configured. The credentials are exercised when data actually syncs.
 
 When the real details arrive, submit them again. There is no separate update verb and no need to
 redo anything else:
@@ -330,8 +384,10 @@ API key — so the two are independent and you rarely need both.
 - **Assuming the wizard steps are independent.** They are ordered and guarded; a 409 naming a step is
   an instruction, not a failure.
 - **Letting the 7-day bootstrap key expire mid-setup.** Mint a durable key early.
-- **Waiting on the customer's ERP credentials before finishing setup.** Don't — submit placeholders,
-  provision, and re-submit the real values later.
+- **Skipping the ERP credentials without asking.** Ask for the real values first. If the user says
+  they aren't available, placeholders let setup finish (provision now, re-submit real values later) —
+  but that is the user's call to make, and a placeholder setup must be flagged as "will not sync yet"
+  in your summary.
 - **Reading a completed provisioning run as proof the ERP connection works.** It isn't; the
   credentials are exercised when data syncs.
 - **`--fields` as a JSON string.** It takes an object; use `@file.json`.
