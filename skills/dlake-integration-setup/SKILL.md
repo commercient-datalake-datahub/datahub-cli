@@ -9,7 +9,9 @@ description: >-
   or standing up a NEW ERP↔CRM integration, resuming a half-finished registration, or connecting a
   CRM's OAuth later. For operating an EXISTING tenant — schema, queries, exports, API keys — use the
   `dlake` skill instead. It encodes the wizard's ORDERING, its guards, and the credential lifetimes
-  that otherwise cost repeated failed calls.
+  that otherwise cost repeated failed calls. What comes AFTER the wizard has its own skills: which
+  ERP tables sync (`dlake-normalsync`), the ODBC agent for a non-SQL-Server source
+  (`dlake-odbcsync`), an API source (`dlake-apisync`), and the CRM push (`dlake-crmpro`).
 ---
 
 # Setting up an integration with `dlake`
