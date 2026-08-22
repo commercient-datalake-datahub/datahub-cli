@@ -1,5 +1,21 @@
 # dlake release notes
 
+## 0.5.19 (2026-08-22)
+
+- **Corrected bundled agent-skill guidance.** The `dlake-apisync` skill shipped in
+  0.5.18 showed an endpoint-configuration example that could not work: the
+  configuration-JSON call omitted the object name, which the platform requires on
+  every save. The skill now says so and both examples include it. If you scripted
+  from the 0.5.18 example, add `--objectName <name>` to the JSON call.
+- **The sync skills now point at each other.** `dlake-normalsync` and
+  `dlake-integration-setup` name `dlake-odbcsync` (sources that are not
+  Microsoft SQL Server) and `dlake-apisync` (API sources), so an agent working on
+  one part of a setup can find the skill for the next part.
+- `dlake admin apisync_save_endpoint_config` now asks for `--objectName` up front
+  and says what is missing, instead of the platform rejecting the call afterwards.
+- The CLI reference gained sections for both sync surfaces, and the Help and API
+  guides were corrected to match. Upgrade:
+  `npm install -g @commercient/dlake` (or `npm install -g datalake`).
 ## 0.5.18 (2026-08-21)
 
 - **New: ODBC Sync setup from the CLI.** Eight `odbcsync_*` admin tools configure
